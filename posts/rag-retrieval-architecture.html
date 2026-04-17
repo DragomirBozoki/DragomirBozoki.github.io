@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Retrieval Architecture - mindloop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="../main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a href="../main.html">Home</a></li>
+          <li><a class="active" href="../blog.html">Blog</a></li>
+          <li><a href="../main.html#about">About</a></li>
+          <li><a href="../main.html#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="../blog.html">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>March 2026</span>
+          <span class="meta-dot">.</span>
+          <span>15 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">RAG</a>
+          <a href="#">Retrieval</a>
+          <a href="#">NLP</a>
+        </div>
+
+        <h1 class="post-title">RAG Retrieval Architecture</h1>
+        <p class="post-subtitle">Why your LLM is usually not the bottleneck, but your retrieval layer is.</p>
+
+        <div class="post-body">
+          <p>
+            Many teams try to fix weak answers by switching models. In production systems, the bigger issue is usually retrieval quality.
+            If the context sent into the model is incomplete, stale, or loosely related, even the best model cannot recover.
+          </p>
+
+          <div class="post-callout">
+            Better retrieval raises the answer ceiling for every model you use, while model swaps alone often hide core search issues.
+          </div>
+
+          <h2>The Core Failure Pattern</h2>
+          <p>
+            A user asks for a specific person, policy code, or document identifier. Pure vector search returns semantically related text,
+            but misses the exact chunk carrying the answer. The response looks confident but drifts from the source.
+          </p>
+
+          <h2>Hybrid Retrieval Beats Pure Vector</h2>
+          <p>
+            Hybrid retrieval combines dense similarity with lexical matching. Dense vectors capture intent, while keyword signals preserve exactness
+            for names, IDs, and compliance language.
+          </p>
+
+<pre><code>async def hybrid_search(query, top_k=10):
+    keywords = extract_keywords(query)
+    vector_hits = await search_dense(query, limit=top_k * 2)
+    lexical_hits = await search_lexical(keywords, limit=top_k)
+    return rerank(vector_hits, lexical_hits)[:top_k]</code></pre>
+
+          <h2>Chunking Strategy Is a Quality Lever</h2>
+          <p>
+            Fixed-size chunks often cut across logical boundaries. Keep sentence or paragraph boundaries and use overlap so linked facts remain available
+            when queries land near edges.
+          </p>
+
+<pre><code>def chunk_text(text, max_chars=900, overlap=220):
+    # Preserve sentence boundaries and retain overlap
+    ...</code></pre>
+
+          <h2>Rewrite Ambiguous Queries</h2>
+          <p>
+            Queries like "what about that regulation" lack searchable detail. Rewriting with conversation context creates clearer retrieval targets,
+            which improves both recall and rank position.
+          </p>
+
+          <h2>Measure Before You Tune</h2>
+          <p>
+            Track retrieval metrics such as Recall@K and MRR on a fixed evaluation set. This gives objective feedback when adjusting chunk size,
+            reranking, filters, or fusion parameters.
+          </p>
+
+          <h2>Takeaway</h2>
+          <p>
+            Retrieval architecture is the performance foundation of RAG. Strong model output starts with precise, high-relevance context.
+            Improve search first, then optimize generation.
+          </p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="qdrant-in-production.html">Previous: Qdrant in Production</a>
+          <a class="button button-primary" href="../blog.html">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

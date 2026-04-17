@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qdrant in Production - mindloop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="../main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a href="../main.html">Home</a></li>
+          <li><a class="active" href="../blog.html">Blog</a></li>
+          <li><a href="../main.html#about">About</a></li>
+          <li><a href="../main.html#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="../blog.html">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>April 2026</span>
+          <span class="meta-dot">.</span>
+          <span>12 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">Qdrant</a>
+          <a href="#">Vector DB</a>
+          <a href="#">RAG</a>
+        </div>
+
+        <h1 class="post-title">Qdrant in Production</h1>
+        <p class="post-subtitle">A practical guide to vector database choices for real RAG traffic.</p>
+
+        <div class="post-body">
+          <p>
+            Teams moving from prototypes to production quickly learn that vector infrastructure decisions shape latency, quality,
+            and operating cost. Qdrant gives strong control over indexing and retrieval behavior when requirements outgrow default settings.
+          </p>
+
+          <h2>Why Teams Choose Qdrant</h2>
+          <p>
+            Qdrant is open source, self-hostable, and tuned for nearest-neighbor search workloads. It is especially useful when you need predictable
+            performance, clear indexing controls, and direct ownership of your data path.
+          </p>
+
+          <div class="post-callout">
+            Use managed search when operational simplicity matters most. Use Qdrant when retrieval tuning and cost control are top priorities.
+          </div>
+
+          <h2>Hybrid Search and Fusion</h2>
+          <p>
+            The most reliable production setup combines dense and sparse retrieval. Reciprocal rank fusion can merge result lists without forcing
+            incompatible score scales into a single metric.
+          </p>
+
+<pre><code>rrf_score(doc) = sum(1 / (k + rank_i(doc)))</code></pre>
+
+          <h2>HNSW Parameters That Matter</h2>
+          <p>
+            HNSW quality and latency are strongly affected by `M`, `ef_construct`, and query-time `ef`. Raise values gradually and track both recall
+            and p95 latency to avoid over-indexing for theoretical gains.
+          </p>
+
+          <h3>Practical Tuning Loop</h3>
+          <ol>
+            <li>Build a stable evaluation set with known relevant chunks.</li>
+            <li>Change one retrieval parameter at a time.</li>
+            <li>Measure Recall@K, MRR, and tail latency.</li>
+            <li>Lock settings only after repeated traffic samples.</li>
+          </ol>
+
+          <h2>Memory and Cost</h2>
+          <p>
+            Quantization can shrink memory footprint and improve throughput. Start with scalar quantization and compare recall loss before moving
+            to more aggressive compression modes.
+          </p>
+
+<pre><code># Example workflow
+create_collection(...)
+enable_quantization(mode="scalar")
+benchmark(recall_at_10, p95_latency)</code></pre>
+
+          <h2>Takeaway</h2>
+          <p>
+            Qdrant is a strong production option when your team needs transparent retrieval behavior and room for performance tuning.
+            Treat retrieval as an engineered subsystem, not a black box.
+          </p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="rag-retrieval-architecture.html">Next: RAG Retrieval Architecture</a>
+          <a class="button button-primary" href="../blog.html">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

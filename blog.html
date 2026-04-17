@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mindloop Blog - Dragomir Bo&#382;oki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a href="main.html">Home</a></li>
+          <li><a class="active" href="blog.html">Blog</a></li>
+          <li><a href="main.html#about">About</a></li>
+          <li><a href="main.html#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="container archive-head">
+        <p class="eyebrow">Archive</p>
+        <h1 class="display-title">Articles on AI engineering systems.</h1>
+        <p class="lead">
+          Long-form notes on retrieval architecture, vector search, deployment strategy, and the implementation details that matter in production.
+        </p>
+      </section>
+
+      <section class="container archive-grid" aria-label="All posts">
+        <a class="post-card" href="posts/qdrant-in-production.html">
+          <p class="card-meta">01 / April 2026</p>
+          <h2 class="card-title">Qdrant in Production: A Practical Guide to Vector Databases for RAG Systems</h2>
+          <p class="card-excerpt">
+            Why dedicated vector databases can outperform managed search at scale, with notes on RRF, HNSW tuning, and quantization.
+          </p>
+          <div class="card-tags">
+            <span class="card-tag">Qdrant</span>
+            <span class="card-tag">RAG</span>
+            <span class="card-tag">Vector DB</span>
+          </div>
+        </a>
+
+        <a class="post-card" href="posts/rag-retrieval-architecture.html">
+          <p class="card-meta">02 / March 2026</p>
+          <h2 class="card-title">RAG Retrieval Architecture</h2>
+          <p class="card-excerpt">
+            How hybrid search, chunk boundaries, query rewriting, and keyword boosting improve downstream LLM quality.
+          </p>
+          <div class="card-tags">
+            <span class="card-tag">Retrieval</span>
+            <span class="card-tag">NLP</span>
+            <span class="card-tag">Python</span>
+          </div>
+        </a>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

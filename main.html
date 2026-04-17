@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mindloop - AI Engineering by Dragomir Bo&#382;oki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a class="active" href="main.html">Home</a></li>
+          <li><a href="blog.html">Blog</a></li>
+          <li><a href="#about">About</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="container hero">
+        <div>
+          <p class="eyebrow"><span class="accent">mindloop</span> / AI engineering journal</p>
+          <h1 class="display-title">Building practical AI systems that work past the demo stage.</h1>
+          <p class="lead">
+            Dragomir Bo&#382;oki writes about retrieval pipelines, vector databases, and production choices behind reliable LLM products.
+            Focused on tradeoffs, architecture, and repeatable engineering patterns.
+          </p>
+          <div class="cta-row">
+            <a class="button button-primary" href="blog.html">Read the Blog</a>
+            <a class="button" href="#featured">Featured Posts</a>
+          </div>
+        </div>
+
+        <aside class="hero-panel hero-recent" aria-label="Most recent post">
+          <p class="eyebrow">Most Recent Post</p>
+          <a class="hero-recent-link" data-recent-post-link href="posts/qdrant-in-production.html">
+            <p class="card-meta" data-recent-post-date>April 2026</p>
+            <h2 class="card-title" data-recent-post-title>Qdrant in Production</h2>
+            <p class="card-excerpt" data-recent-post-excerpt>
+              When a dedicated vector database beats general search services, and how to run it without surprises.
+            </p>
+            <span class="button">Read Post</span>
+          </a>
+        </aside>
+      </section>
+
+      <section id="about" class="container section">
+        <p class="eyebrow">About</p>
+        <h2 class="section-title">Engineering notes with editorial clarity.</h2>
+        <p class="section-copy">
+          mindloop is a personal blog by Dragomir Bo&#382;oki, an AI engineer working on multilingual NLP, retrieval architecture,
+          and high-accuracy search. Every post is written to help teams make better technical decisions with less guesswork.
+        </p>
+      </section>
+
+      <section id="featured" class="container section">
+        <p class="eyebrow">Featured</p>
+        <h2 class="section-title">Start with these field-tested guides.</h2>
+        <div class="grid-cards">
+          <a class="post-card" href="posts/qdrant-in-production.html">
+            <p class="card-meta">April 2026</p>
+            <h3 class="card-title">Qdrant in Production</h3>
+            <p class="card-excerpt">When a dedicated vector database beats general search services, and how to run it without surprises.</p>
+            <div class="card-tags">
+              <span class="card-tag">Qdrant</span>
+              <span class="card-tag">Vector DB</span>
+              <span class="card-tag">RAG</span>
+            </div>
+          </a>
+
+          <a class="post-card" href="posts/rag-retrieval-architecture.html">
+            <p class="card-meta">March 2026</p>
+            <h3 class="card-title">RAG Retrieval Architecture</h3>
+            <p class="card-excerpt">Hybrid retrieval, chunk strategy, and query understanding techniques that actually move answer quality.</p>
+            <div class="card-tags">
+              <span class="card-tag">Retrieval</span>
+              <span class="card-tag">NLP</span>
+              <span class="card-tag">Python</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <footer id="contact" class="container footer">
+        <small>&copy; 2026 mindloop by Dragomir Bo&#382;oki</small>
+        <div class="cta-row">
+          <a class="button" href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
+          <a class="button" href="https://linkedin.com" target="_blank" rel="noreferrer">LinkedIn</a>
+        </div>
+      </footer>
+    </main>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
