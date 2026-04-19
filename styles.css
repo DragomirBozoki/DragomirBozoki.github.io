@@ -493,10 +493,6 @@ img {
   margin-bottom: 1rem;
   margin-left: auto;
   margin-right: auto;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--surface);
 }
 
 .post-media img {
@@ -504,16 +500,10 @@ img {
   max-height: 380px;
   height: auto;
   object-fit: contain;
-  background: var(--soft);
 }
 
 .post-media figcaption {
-  padding: 0.7rem 0.9rem;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.74rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  display: none;
 }
 
 .post-footer {
