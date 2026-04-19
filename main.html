@@ -63,29 +63,7 @@
       <section id="featured" class="container section">
         <p class="eyebrow">Featured</p>
         <h2 class="section-title">Start with these field-tested guides.</h2>
-        <div class="grid-cards">
-          <a class="post-card" href="posts/qdrant-in-production.html">
-            <p class="card-meta">April 2026</p>
-            <h3 class="card-title">Qdrant in Production</h3>
-            <p class="card-excerpt">When a dedicated vector database beats general search services, and how to run it without surprises.</p>
-            <div class="card-tags">
-              <span class="card-tag">Qdrant</span>
-              <span class="card-tag">Vector DB</span>
-              <span class="card-tag">RAG</span>
-            </div>
-          </a>
-
-          <a class="post-card" href="posts/rag-retrieval-architecture.html">
-            <p class="card-meta">March 2026</p>
-            <h3 class="card-title">RAG Retrieval Architecture</h3>
-            <p class="card-excerpt">Hybrid retrieval, chunk strategy, and query understanding techniques that actually move answer quality.</p>
-            <div class="card-tags">
-              <span class="card-tag">Retrieval</span>
-              <span class="card-tag">NLP</span>
-              <span class="card-tag">Python</span>
-            </div>
-          </a>
-        </div>
+        <div class="grid-cards" data-featured-posts></div>
       </section>
 
       <footer id="contact" class="container footer">
@@ -97,6 +75,7 @@
       </footer>
     </main>
   </div>
+  <script src="posts/posts-data.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quantization Theory - Why is Quantization so Important? - mindloop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="../main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a href="../main.html">Home</a></li>
+          <li><a class="active" href="../blog.html">Blog</a></li>
+          <li><a href="../main.html#about">About</a></li>
+          <li><a href="../main.html#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="../blog.html">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>March 20, 2026</span>
+          <span class="meta-dot">.</span>
+          <span>8 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">Quantization</a>
+          <a href="#">LLMs</a>
+          <a href="#">Inference</a>
+        </div>
+
+        <h1 class="post-title">Quantization Theory - Why is quantization so Important?</h1>
+        <p class="post-subtitle">The math and engineering behind LLM quantization, from first principles to LLM.int8(), GPTQ, and AWQ.</p>
+
+        <div class="post-body">
+          <p>
+            Every LLM you have ever run locally was probably quantized. You downloaded a <code>Q4_K_M</code> GGUF, loaded it, and it worked.
+            But what actually happened to those weights? What information was destroyed, and why does the model still function?
+          </p>
+
+          <p>
+            This post covers the math and engineering behind LLM quantization, from basic theory to three practical methods:
+            <strong>LLM.int8()</strong>, <strong>GPTQ</strong>, and <strong>AWQ</strong>. If you deploy models on-premises or want to fit a 70B model
+            onto fewer GPUs, this is for you.
+          </p>
+
+          <h2>01 Foundation</h2>
+          <h3>What Quantization Actually Is</h3>
+          <p>
+            A neural network is a collection of floating-point numbers. A 70B parameter model in FP16 (16 bits per weight) occupies 140 GB of memory.
+            That is more than a single GPU can hold.
+          </p>
+
+<pre><code>q = round((x - zero_point) / scale)
+scale = (max - min) / (2^bits - 1)
+x_hat = q * scale + zero_point</code></pre>
+
+          <p>
+            Using <code>x_hat</code> instead of <code>x</code> introduces quantization error. The entire problem is balancing that error against memory and speed gains.
+            If you know signal processing, this is the same analog-to-digital tradeoff: lower bit depth means more quantization noise.
+          </p>
+
+          <h3>The Memory Math</h3>
+<pre><code>FP32: 4 bytes/param  -> 70B model = 280 GB
+FP16: 2 bytes/param  -> 70B model = 140 GB
+INT8: 1 byte/param   -> 70B model = 70 GB
+INT4: 0.5 byte/param -> 70B model = 35 GB</code></pre>
+
+          <p>
+            Moving from FP16 to INT4 can be the difference between needing two high-end GPUs and fitting on one. It also improves throughput,
+            because inference is usually memory-bandwidth-bound.
+          </p>
+
+          <h2>02 The Breakthrough</h2>
+          <h3>LLM.int8() and the Outlier Problem</h3>
+          <p>
+            Naive INT8 rounding works for smaller models, but breaks at larger scales. The reason is activation outliers:
+            a tiny set of channels has very large values while most channels remain near zero.
+          </p>
+
+          <div class="post-callout">
+            If scale must cover rare values near 100 while most data lies in [-3, 3], you lose precision where the model needs it most.
+          </div>
+
+          <p>
+            LLM.int8() solves this with mixed precision decomposition:
+            outlier channels stay in FP16, the rest run in INT8, and results are summed. The FP16 path is tiny in cost but preserves quality.
+          </p>
+
+          <h2>03 Second-Order Methods</h2>
+          <h3>GPTQ: Quantize, Then Compensate</h3>
+          <p>
+            GPTQ targets INT4 quantization where only 16 values per weight exist. It uses second-order information (Hessian approximation)
+            to redistribute quantization error across still-unquantized weights.
+          </p>
+
+<pre><code>Goal: minimize ||W X - W_hat X||^2
+H = 2 X X^T</code></pre>
+
+          <p>
+            Instead of accepting rounding damage, GPTQ compensates it with a closed-form update derived from Optimal Brain Surgeon ideas,
+            then makes the method practical with fixed ordering, batched lazy updates, and Cholesky-based inversion.
+          </p>
+
+          <h2>04 Activation-Aware</h2>
+          <h3>AWQ: Protect Before You Quantize</h3>
+          <p>
+            AWQ asks a different question: can we protect the important weights first, then quantize?
+            Weight importance is estimated from activation magnitude. Channels with larger activations are more error-sensitive.
+          </p>
+
+<pre><code>Y = W X = (W * diag(s)) * (diag(s)^-1 * X)
+s_j = mean(|x_j|)^alpha, alpha ~= 0.5</code></pre>
+
+          <p>
+            This keeps output mathematically equivalent while reshaping weight distributions so important channels use quantization range more effectively.
+            Result: strong INT4 quality with hardware-friendly uniform quantization.
+          </p>
+
+          <h2>05 GPTQ vs AWQ</h2>
+          <p>
+            GPTQ is second-order and highly effective, but slower to produce. AWQ is first-order, fast, and often preferred in deployment stacks like
+            vLLM and TensorRT-LLM.
+          </p>
+
+          <p>
+            If you use <code>llama.cpp</code>, GGUF variants such as <code>Q4_K_M</code> are common practical choices for consumer hardware.
+          </p>
+
+          <h2>06 Evaluation</h2>
+          <p>
+            Perplexity is the first metric, but not the only one. INT8 usually has negligible loss, while INT4 can introduce measurable degradation,
+            especially in smaller models. Always validate on your real downstream tasks.
+          </p>
+
+          <h2>07 Deployment Framework</h2>
+          <p>
+            For 70B-class models: FP16 if you have enough VRAM, INT8 around 80 GB VRAM, INT4 for 40-48 GB VRAM, and GGUF INT4 for consumer setups.
+            Quantization is lossy compression. The right choice depends on model size, workload, and hardware budget.
+          </p>
+
+          <p>
+            Next in this series: embedding space geometry, and why retrieval quality in RAG depends on high-dimensional vector behavior.
+          </p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="qdrant-in-production.html">Previous: Qdrant in Production</a>
+          <a class="button button-primary" href="../blog.html">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

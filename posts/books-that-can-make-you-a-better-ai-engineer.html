@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Books That Can make you a Better AI Engineer - mindloop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="../main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a href="../main.html">Home</a></li>
+          <li><a class="active" href="../blog.html">Blog</a></li>
+          <li><a href="../main.html#about">About</a></li>
+          <li><a href="../main.html#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="../blog.html">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>February 17, 2026</span>
+          <span class="meta-dot">.</span>
+          <span>10 min read</span>
+          <span class="meta-dot">.</span>
+          <span>Dragomir Bozoki</span>
+          <span class="meta-dot">.</span>
+          <a href="#">Books</a>
+          <a href="#">AI Engineering</a>
+          <a href="#">Learning</a>
+        </div>
+
+        <h1 class="post-title">Books That Can make you a Better AI Engineer</h1>
+        <p class="post-subtitle">The five books that build the foundations for reliable AI systems: from coding basics to architecture that scales.</p>
+
+        <div class="post-body">
+          <h2>Introduction</h2>
+          <p>
+            There is a temptation in the AI space to skip the fundamentals. You learn to call an API, chain a few prompts together,
+            and suddenly you are building a "production AI system." Except you are not. You are building a demo with production ambitions.
+          </p>
+          <p>
+            To be a strong AI engineer or ML engineer, you first need to be a solid software engineer. AI engineering is a specialization,
+            not a separate discipline. It is software engineering applied to systems that use machine learning models.
+          </p>
+          <p>
+            The gap that matters is not between engineers who know LLMs and those who do not. It is between engineers who understand the
+            systems around models and those who only understand the models themselves.
+          </p>
+
+          <div class="post-callout">
+            01 Foundation: clean, modular code. 02 Efficiency: data structures and access patterns. 03 Scale: system-level thinking.
+            04 Longevity: architecture decisions that compound over time.
+          </div>
+
+          <h2>1. Python Crash Course</h2>
+          <figure class="post-media">
+            <img src="../images/books/pythoncrashcourse.jpg" alt="Python Crash Course book cover" loading="lazy" />
+            <figcaption>Eric Matthes - Python Crash Course</figcaption>
+          </figure>
+          <p>
+            If you are new to Python or coming from another language, this is where you start. The book does not rush toward advanced topics.
+            It builds loops, conditionals, functions, classes, and file handling in the right order.
+          </p>
+          <p>
+            Most bugs in data pipelines and ML preprocessing scripts come from unclear understanding of state, scope, and references.
+            This book fixes that foundation.
+          </p>
+
+          <h3>Why it matters</h3>
+          <ul>
+            <li>Exceptionally clear pacing with no assumed background.</li>
+            <li>Project-based second half that reinforces fundamentals.</li>
+            <li>Strong base for every later AI/ML system task.</li>
+          </ul>
+
+          <h2>2. Machine Learning with PyTorch and Scikit-Learn</h2>
+          <figure class="post-media">
+            <img src="../images/books/mlpytorchscikitlearn.jpg" alt="Machine Learning with PyTorch and Scikit-Learn book cover" loading="lazy" />
+            <figcaption>Sebastian Raschka - Machine Learning with PyTorch and Scikit-Learn</figcaption>
+          </figure>
+          <p>
+            This is the reference you should actually read, not only consult. It connects mathematical intuition and implementation,
+            so you understand what optimization is doing and why model behavior changes.
+          </p>
+          <p>
+            In production, that depth matters. When validation shifts or performance degrades, the engineer who understands training dynamics
+            can debug the system. Everyone else is guessing.
+          </p>
+
+          <h3>Why it matters</h3>
+          <ul>
+            <li>Bridges theory and practice in one coherent flow.</li>
+            <li>Covers classical ML and deep learning together.</li>
+            <li>Focuses on evaluation quality, not only training loops.</li>
+          </ul>
+
+          <h2>3. Data Structures and Algorithms</h2>
+          <figure class="post-media">
+            <img src="../images/books/dsa.png" alt="Data Structures and Algorithms book cover" loading="lazy" />
+            <figcaption>Granville Barnett and Luca Del Tongo - Data Structures and Algorithms</figcaption>
+          </figure>
+          <p>
+            AI bottlenecks are often not inside the model. They are around it: indexing, retrieval, state transitions,
+            and heavy preprocessing paths.
+          </p>
+          <p>
+            Understanding complexity and data structures lets you detect hidden inefficiencies early,
+            before they become production latency and cost problems.
+          </p>
+
+          <h3>Why it matters</h3>
+          <ul>
+            <li>Retrieval systems depend on efficient indexing structures.</li>
+            <li>Vector search relies on optimized nearest-neighbor logic.</li>
+            <li>Large pipelines fail fast when complexity is ignored.</li>
+          </ul>
+
+          <h2>4. Building Intelligent AI Systems</h2>
+          <figure class="post-media">
+            <img src="../images/books/buildingagenticAIsystems.jpg" alt="Building Intelligent AI Systems book cover" loading="lazy" />
+            <figcaption>Anjanava Biswas and Vrik Talukdar - Building Intelligent AI Systems</figcaption>
+          </figure>
+          <p>
+            At some point, the hard problem stops being model design and becomes orchestration design: tool calling,
+            state transitions, and multi-step workflow reliability.
+          </p>
+          <p>
+            This book is for that stage. It focuses on architecture-level coordination where one model output triggers downstream actions,
+            and correctness depends on the full system flow.
+          </p>
+
+          <h3>Why it matters</h3>
+          <ul>
+            <li>Production-oriented coverage of agentic patterns.</li>
+            <li>Practical orchestration strategies and pipeline design.</li>
+            <li>Useful framing for failure modes and observability.</li>
+          </ul>
+
+          <h2>5. Clean Architecture</h2>
+          <figure class="post-media">
+            <img src="../images/books/cleanarhitecture.jpg" alt="Clean Architecture book cover" loading="lazy" />
+            <figcaption>Robert C. Martin - Clean Architecture</figcaption>
+          </figure>
+          <p>
+            AI projects often start as small prototypes and expand quickly. Without structure, they become brittle and hard to change.
+            Clean Architecture gives you principles for keeping domain logic stable while infrastructure evolves.
+          </p>
+          <p>
+            Good architecture is not elegance for its own sake. It is the reason teams can keep moving quickly six months later,
+            even as providers, tools, and requirements change.
+          </p>
+
+          <h3>Why it matters</h3>
+          <ul>
+            <li>Protects domain logic from provider and infrastructure coupling.</li>
+            <li>Makes refactoring and testing safer under growth pressure.</li>
+            <li>Improves team velocity over time.</li>
+          </ul>
+
+          <h2>Recommended Reading Order</h2>
+          <ol>
+            <li>Python Crash Course</li>
+            <li>Machine Learning with PyTorch and Scikit-Learn</li>
+            <li>Data Structures and Algorithms</li>
+            <li>Building Intelligent AI Systems</li>
+            <li>Clean Architecture</li>
+          </ol>
+
+          <h2>The Goal Is Systems, Not Models</h2>
+          <p>
+            Being a strong AI engineer is not about chasing the latest model every month. It is about building reliable, efficient,
+            maintainable systems that keep working under real traffic, evolving requirements, and team handoffs.
+          </p>
+          <p>
+            You do not become a good AI engineer by mastering AI alone. You become one by mastering software engineering,
+            then specializing deliberately.
+          </p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="quantization-theory-why-is-quantization-so-important.html">Previous: Quantization Theory</a>
+          <a class="button button-primary" href="../blog.html">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

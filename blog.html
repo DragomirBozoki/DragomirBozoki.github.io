@@ -32,34 +32,10 @@
         </p>
       </section>
 
-      <section class="container archive-grid" aria-label="All posts">
-        <a class="post-card" href="posts/qdrant-in-production.html">
-          <p class="card-meta">01 / April 2026</p>
-          <h2 class="card-title">Qdrant in Production: A Practical Guide to Vector Databases for RAG Systems</h2>
-          <p class="card-excerpt">
-            Why dedicated vector databases can outperform managed search at scale, with notes on RRF, HNSW tuning, and quantization.
-          </p>
-          <div class="card-tags">
-            <span class="card-tag">Qdrant</span>
-            <span class="card-tag">RAG</span>
-            <span class="card-tag">Vector DB</span>
-          </div>
-        </a>
-
-        <a class="post-card" href="posts/rag-retrieval-architecture.html">
-          <p class="card-meta">02 / March 2026</p>
-          <h2 class="card-title">RAG Retrieval Architecture</h2>
-          <p class="card-excerpt">
-            How hybrid search, chunk boundaries, query rewriting, and keyword boosting improve downstream LLM quality.
-          </p>
-          <div class="card-tags">
-            <span class="card-tag">Retrieval</span>
-            <span class="card-tag">NLP</span>
-            <span class="card-tag">Python</span>
-          </div>
-        </a>
-      </section>
+      <section class="container archive-grid" data-archive-posts aria-label="All posts"></section>
     </main>
   </div>
+  <script src="posts/posts-data.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
