@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>mindloop - AI Engineering by Dragomir Bo&#382;oki</title>
+  <title>mindloop &mdash; Dragomir Bo&#382;oki</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="page-shell">
     <header class="site-nav">
       <div class="container nav-inner">
-        <a class="brand" href="main.html">mindloop<span>.</span></a>
+        <a class="brand" href="main.html">mindloop</a>
         <ul class="nav-links">
           <li><a class="active" href="main.html">Home</a></li>
-          <li><a href="blog.html">Blog</a></li>
+          <li><a href="blog.html">Writing</a></li>
           <li><a href="#about">About</a></li>
           <li><a href="#contact">Contact</a></li>
         </ul>
@@ -26,48 +26,44 @@
     <main class="main-content">
       <section class="container hero">
         <div>
-          <p class="eyebrow"><span class="accent">mindloop</span> / AI engineering journal</p>
-          <h1 class="display-title">Building practical AI systems that work past the demo stage.</h1>
+          <h1 class="display-title">I build retrieval systems that work after the demo.</h1>
           <p class="lead">
-            Dragomir Bo&#382;oki writes about retrieval pipelines, vector databases, and production choices behind reliable LLM products.
-            Focused on tradeoffs, architecture, and repeatable engineering patterns.
+            I&rsquo;m Dragomir Bo&#382;oki. I write about vector databases, ranking, and the parts
+            of RAG that only break in production &mdash; the expensive lessons, not the tutorials.
           </p>
           <div class="cta-row">
-            <a class="button button-primary" href="blog.html">Read the Blog</a>
-            <a class="button" href="#featured">Featured Posts</a>
+            <a class="button button-primary" href="blog.html">Read the writing</a>
           </div>
         </div>
 
-        <aside class="hero-panel hero-recent" aria-label="Most recent post">
-          <p class="eyebrow">Most Recent Post</p>
+        <aside class="hero-recent" aria-label="Most recent post">
+          <p class="eyebrow">Latest</p>
           <a class="hero-recent-link" data-recent-post-link href="posts/qdrant-in-production.html">
             <p class="card-meta" data-recent-post-date>April 2026</p>
             <h2 class="card-title" data-recent-post-title>Qdrant in Production</h2>
             <p class="card-excerpt" data-recent-post-excerpt>
               When a dedicated vector database beats general search services, and how to run it without surprises.
             </p>
-            <span class="button">Read Post</span>
           </a>
         </aside>
       </section>
 
-      <section id="about" class="container section">
-        <p class="eyebrow">About</p>
-        <h2 class="section-title">Engineering notes with editorial clarity.</h2>
-        <p class="section-copy">
-          mindloop is a personal blog by Dragomir Bo&#382;oki, an AI engineer working on multilingual NLP, retrieval architecture,
-          and high-accuracy search. Every post is written to help teams make better technical decisions with less guesswork.
-        </p>
-      </section>
-
       <section id="featured" class="container section">
-        <p class="eyebrow">Featured</p>
-        <h2 class="section-title">Start with these field-tested guides.</h2>
+        <h2 class="section-title">Recent writing</h2>
         <div class="grid-cards" data-featured-posts></div>
       </section>
 
+      <section id="about" class="container section">
+        <h2 class="section-title">About</h2>
+        <p class="section-copy">
+          I&rsquo;m an AI engineer working on multilingual NLP, retrieval architecture, and
+          high-accuracy search. This is where I keep notes on the decisions that held up in
+          production &mdash; and the ones that didn&rsquo;t.
+        </p>
+      </section>
+
       <footer id="contact" class="container footer">
-        <small>&copy; 2026 mindloop by Dragomir Bo&#382;oki</small>
+        <small>&copy; 2026 Dragomir Bo&#382;oki</small>
         <div class="cta-row">
           <a class="button" href="https://github.com" target="_blank" rel="noreferrer">GitHub</a>
           <a class="button" href="https://linkedin.com" target="_blank" rel="noreferrer">LinkedIn</a>
