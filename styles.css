@@ -219,6 +219,13 @@ img {
   letter-spacing: 0.02em;
 }
 
+#about .eyebrow,
+#featured .eyebrow {
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 .hero-recent-link {
   display: flex;
   flex-wrap: wrap;
