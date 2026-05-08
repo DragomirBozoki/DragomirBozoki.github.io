@@ -1,5 +1,17 @@
 window.POSTS = [
   {
+    title: "Predicting ARKit-52 Blendshapes from Audio",
+    excerpt:
+      "How an ensemble, a learned face refiner, and a deterministic blink module took us to second place at the AI-SPEAK 2026 competition.",
+    href: "posts/ai-speak-blendshape-prediction.html",
+    dateLabel: "May 8, 2026",
+    publishedAt: "2026-05-08",
+    tags: ["Audio", "Deep Learning", "PyTorch", "Animation"],
+    archiveTitle: "Predicting ARKit-52 Blendshapes from Audio",
+    archiveExcerpt:
+      "A breakdown of the three components that made the difference: a TCN/BiGRU ensemble, a learned linear refiner for upper-face expressivity, and a deterministic blink generator for demo polish.",
+  },
+  {
     title: "Qdrant in Production",
     excerpt:
       "When a dedicated vector database beats general search services, and how to run it without surprises.",
