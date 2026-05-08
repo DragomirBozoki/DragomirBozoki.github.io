@@ -782,3 +782,29 @@ img {
     animation: none !important;
   }
 }
+
+/* ============================================
+   Add this to styles.css
+   (place near the existing .post-media rule)
+   ============================================ */
+
+/* Make video inherit the same look as post-media images */
+.post-media video {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 8px;
+  background: #000;
+}
+
+/* Hero video: centered, with sensible max width so it doesn't
+   span the entire reading column on wide screens */
+.post-media.post-video {
+  margin: 1.5rem auto 2.5rem;
+  max-width: 720px;
+  text-align: center;
+}
+
+.post-media.post-video figcaption {
+  text-align: center;
+}
