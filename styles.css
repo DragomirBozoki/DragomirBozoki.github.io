@@ -808,3 +808,40 @@ img {
 .post-media.post-video figcaption {
   text-align: center;
 }
+
+/* ============================================
+   AI-SPEAK post: hero video styling
+   Append this to the END of styles.css
+   ============================================ */
+
+.post-media.post-video {
+  display: block;
+  margin: 1.5rem auto 2.5rem auto !important;
+  max-width: 640px !important;
+  width: 100% !important;
+  text-align: center;
+}
+
+.post-media.post-video video {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100% !important;
+  border-radius: 8px;
+  background: #000;
+  margin: 0 auto;
+}
+
+.post-media.post-video figcaption {
+  text-align: center;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+/* Mobile: let it use full width with a bit of breathing room */
+@media (max-width: 700px) {
+  .post-media.post-video {
+    max-width: 100% !important;
+  }
+}
