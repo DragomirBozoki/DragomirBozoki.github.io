@@ -9,9 +9,9 @@
 
   --radius: 6px;
 
-  --content-max: 760px;
+  --content-max: 880px;
   --wide-max: 1040px;
-  --post-max: 720px;
+  --post-max: 820px;
   --nav-height: 56px;
 
   --font-text: "Source Serif 4", Georgia, "Times New Roman", serif;
@@ -234,14 +234,35 @@ img {
 
 .hero-recent-link {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1rem;
+  align-items: flex-start;
+  gap: 1.25rem;
   margin-top: 0.5rem;
   border: 0;
   background: transparent;
   padding: 0;
   transition: none;
+}
+
+.hero-recent-image {
+  flex: 0 0 140px;
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent);
+}
+
+.hero-recent-image[hidden] {
+  display: none;
+}
+
+.hero-recent-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .hero-recent-link .card-meta {
@@ -625,6 +646,46 @@ img {
   line-height: 1.6;
 }
 
+.post-body .table-scroll {
+  overflow-x: auto;
+  margin: 1.4rem 0;
+}
+
+.post-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+.post-body th,
+.post-body td {
+  text-align: left;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.post-body th {
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 2px solid var(--rule);
+}
+
+.post-body td {
+  color: var(--muted);
+}
+
+.post-body td:first-child,
+.post-body th:first-child {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.post-body tr:last-child td {
+  border-bottom: none;
+}
+
 .post-callout {
   margin-top: 1.4rem;
   padding: 1rem 1.2rem;
@@ -683,14 +744,14 @@ img {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
 }
 
 .footer small {
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 0.85rem;
-  font-weight: 500; 
+  font-weight: 500;
 }
 
 .footer .button {
@@ -700,6 +761,39 @@ img {
 .footer .cta-row {
   margin-top: 0;
   gap: 1.5rem;
+}
+
+/* ───────── Contact icons ───────── */
+
+.icon-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  background: var(--soft);
+  color: var(--text);
+  transition: color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.icon-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-link:hover,
+.icon-link:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
 /* ───────── Responsive ───────── */
@@ -719,6 +813,17 @@ img {
 
   .nav-links {
     gap: 1.1rem;
+  }
+
+  .hero-recent-link {
+    flex-direction: column;
+  }
+
+  .hero-recent-image {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    max-width: 220px;
   }
 
   .post-card {
@@ -783,65 +888,39 @@ img {
   }
 }
 
-/* ============================================
-   Add this to styles.css
-   (place near the existing .post-media rule)
-   ============================================ */
-
-/* Make video inherit the same look as post-media images */
-.post-media video {
-  width: 100%;
-  height: auto;
-  display: block;
-  border-radius: 8px;
-  background: #000;
-}
-
-/* Hero video: centered, with sensible max width so it doesn't
-   span the entire reading column on wide screens */
+/* Video posts: one consistent framed player. aspect-ratio + object-fit
+   letterboxes clips of any orientation (phone verticals included) instead
+   of each video reflowing the page to its own native size. */
 .post-media.post-video {
-  margin: 1.5rem auto 2.5rem;
+  display: block;
+  margin: 1.75rem auto 2.5rem;
   max-width: 720px;
-  text-align: center;
-}
-
-.post-media.post-video figcaption {
-  text-align: center;
-}
-
-/* ============================================
-   AI-SPEAK post: hero video styling
-   Append this to the END of styles.css
-   ============================================ */
-
-.post-media.post-video {
-  display: block;
-  margin: 1.5rem auto 2.5rem auto !important;
-  max-width: 640px !important;
-  width: 100% !important;
+  width: 100%;
   text-align: center;
 }
 
 .post-media.post-video video {
   display: block;
-  width: 100% !important;
-  height: auto !important;
-  max-width: 100% !important;
-  border-radius: 8px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
   background: #000;
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   margin: 0 auto;
 }
 
 .post-media.post-video figcaption {
   text-align: center;
-  margin-top: 0.5rem;
-  font-size: 0.9rem;
-  opacity: 0.7;
+  margin-top: 0.6rem;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
 }
 
-/* Mobile: let it use full width with a bit of breathing room */
 @media (max-width: 700px) {
   .post-media.post-video {
-    max-width: 100% !important;
+    max-width: 100%;
   }
 }

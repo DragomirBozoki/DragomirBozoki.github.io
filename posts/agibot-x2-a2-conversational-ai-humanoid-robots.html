@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Engineering an AI Platform for Humanoid Robots - mindloop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="../main.html">mindloop<span>.</span></a>
+        <ul class="nav-links">
+          <li><a href="../main.html">Home</a></li>
+          <li><a class="active" href="../blog.html">Writing</a></li>
+          <li><a href="../main.html#about">About</a></li>
+          <li><a href="../main.html#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="../blog.html">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>August 2026</span>
+          <span class="meta-dot">.</span>
+          <span>30 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">Robotics</a>
+          <a href="#">Voice AI</a>
+          <a href="#">LiveKit</a>
+          <a href="#">Computer Vision</a>
+        </div>
+
+        <h1 class="post-title">Engineering an AI Platform for Humanoid Robots</h1>
+        <p class="post-subtitle">
+          How a voice agent built for one robot became a shared framework for the AgiBot X2 Ultra and A2 Ultra,
+          covering real-time voice, vision, gestures, and knowledge retrieval.
+        </p>
+
+        <div class="post-body">
+
+          <p>
+            The first version of this project was a LiveKit voice agent for a single humanoid robot. It could answer
+            questions and carry on a spoken conversation. Once that worked, we wanted to find out how much of it
+            could be reused on a second robot with different hardware. That experiment grew into a platform that
+            now runs on both the
+            <strong>AgiBot X2 Ultra</strong> and the <strong>AgiBot A2 Ultra</strong>, sharing almost everything
+            above the hardware line.
+          </p>
+          <p>
+            This post covers the parts that took most of the work: moving audio from the robot's microphone to an
+            LLM and back without self-echo, deciding when to use the knowledge base, keeping gestures and facial
+            expressions separate from language generation, and making the whole system practical to run at an
+            event.
+          </p>
+
+          <figure class="post-media post-video">
+            <video src="../videos/x2-conversation-serbian.mp4" muted loop playsinline preload="metadata" controls>
+              Your browser does not support the video tag. You can
+              <a href="../videos/x2-conversation-serbian.mp4">download the clip here</a>.
+            </video>
+            <figcaption>AgiBot X2 Ultra holding a conversation in Serbian: full pipeline, from microphone to gesture and face display.</figcaption>
+          </figure>
+
+          <h2>What's Shared Between the Robots</h2>
+          <p>
+            The part of the system that does <em>not</em> change between robots is larger than the part that does.
+            The shared software layer includes:
+          </p>
+          <ul>
+            <li>A LiveKit-based voice agent handling real-time audio transport;</li>
+            <li>The STT &rarr; LLM &rarr; TTS pipeline and turn-taking logic;</li>
+            <li>A RAG service backed by Qdrant for grounded, factual answers;</li>
+            <li>Prompt and persona definitions;</li>
+            <li>A supervisor backend (FastAPI) and a React operator frontend;</li>
+            <li>Conversation lifecycle management;</li>
+            <li>Quizzes, polls, and scripted event scenarios;</li>
+            <li>A camera bridge and vision controller;</li>
+            <li>Face recognition with consent-based enrollment;</li>
+            <li>A gesture bridge;</li>
+            <li>Visual state reactions on the robot's face display;</li>
+            <li>Early, experimental teleoperation work.</li>
+          </ul>
+          <p>
+            Robot-specific work &mdash; audio access, camera streams, motion, and the face display &mdash; stays
+            behind small adapters at the bottom of the stack. Adding the second robot therefore didn't require any
+            changes to the conversation logic.
+          </p>
+
+          <h2>A Multi-Computer Architecture</h2>
+          <p>
+            The two robots don't even agree on how many computers they are. X2 runs three separate onboard machines
+            with clearly split responsibilities:
+          </p>
+          <ol>
+            <li>
+              <strong>PC1 &mdash; Motion Control.</strong> Low-level body control: balance and safety states. Our
+              application never talks to it directly or sends arbitrary joint trajectories to it. We treated its
+              stabilization processes as off-limits throughout development.
+            </li>
+            <li>
+              <strong>PC2 &mdash; Development.</strong> This is where the actual AI system lives: the Robot
+              Supervisor, the LiveKit server and voice agent, the RAG service, Qdrant, the camera bridge and vision
+              controller, the gesture bridge, and the integration processes that talk to the rest of the robot.
+            </li>
+            <li>
+              <strong>PC3 &mdash; Interaction (10.0.1.42).</strong> This is the machine that physically owns the
+              microphones and speakers. Because it's a separate box from PC2, the audio bridge can't just open a
+              local device &mdash; it has to reach across the network, which is why X2's audio path looks different
+              from A2's (more on that below).
+            </li>
+          </ol>
+          <p>
+            A2 gets by with two. A comment in <code>a2_motion.py</code> lays out the split about as plainly as it
+            could be put:
+          </p>
+<pre><code>Dev/brain PC (Orin, 192.168.100.110)  --eth_to_x86-->  Motion Controller x86 (192.168.100.100)</code></pre>
+          <p>
+            The Orin (a Jetson Orin-class ARM64 board, <code>aarch64</code>, running a real-time kernel &mdash;
+            <code>5.15.136-rt-tegra PREEMPT_RT</code>) is where all of our code runs: Supervisor, LiveKit agent, RAG,
+            audio bridge, camera bridge. The x86 motion controller is A2's equivalent of X2's PC1 &mdash; a box we
+            don't run general application code on, full stop. Internal docs put it bluntly: don't run normal
+            high-level custom code on the x86 motion-control computer unless you're specifically doing
+            vendor-approved low-level motion-control development. But unlike X2's PC1, A2's x86 box isn't purely a
+            motion computer &mdash; it also happens to host the vendor's own <code>rc_module</code> service and a
+            Flutter face app (<code>com.agibot.aimmaster.face</code>), which turns out to matter a lot for how the
+            head-screen integration works (see below).
+          </p>
+          <p>The services this code actually talks to, and where they live:</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Service</th><th>Host</th><th>Port</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>McBaseService / McDataService / McMotionService</td><td>x86 (.100)</td><td>56322</td></tr>
+                <tr><td>MotionCommandService / SendMotionCommand</td><td>x86 (.100)</td><td>56444</td></tr>
+                <tr><td>rc_module (RcEmoticonPlayerService)</td><td>x86 (.100)</td><td>59001</td></tr>
+                <tr><td>ResourceService</td><td>Orin (.110)</td><td>51049</td></tr>
+                <tr><td>RobotFunctionSettingService</td><td>Orin (.110)</td><td>51048</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            One detail worth calling out on its own: the Orin and the x86 box each keep their own
+            <code>/agibot</code> directory on separate disks. The face app reads the x86 copy; <code>ResourceService</code>
+            validates the Orin copy. That split is exactly what makes it cheap to push an update to the screen
+            without touching anything the motion controller depends on.
+          </p>
+          <p>
+            No internal IP addresses beyond what's already public in this post, tokens, or credentials are shared
+            here; the architecture is what matters.
+          </p>
+          <p>
+            Capability isn't expressed as a flag on the robot, either. There's no <code>has_gesture=False</code>
+            anywhere in the platform code &mdash; the model spec that describes a robot has exactly five fields
+            (id, platform, display name, audio bridge, notes), and nothing more. Instead, every capability owns its
+            own support map (one dict for gestures, one for the head screen, one for visual UI, one for
+            temperature), and a robot that isn't a key in that dict simply has no support: the corresponding
+            <code>get_*_spec()</code> call returns <code>None</code> and the service shuts itself down cleanly. The
+            platform docs are explicit that this is deliberate &mdash; they call out "broad robot capability
+            catalogs" as something intentionally <em>not</em> modeled yet. It's a smaller, less impressive-looking
+            design than a capability matrix baked into every robot profile, but it fails a lot more gracefully.
+          </p>
+          <p>
+            That newer, unified capability-map layer currently has entries for the A2 and for Unitree's G1 Edu.
+            X2's gesture and face-display path predates it and runs through its own established AimDK integration
+            instead (below) &mdash; it isn't wired into this particular abstraction yet, which is a statement about
+            the newer module's integration status, not about what X2's hardware can or can't do. Where the map layer
+            does apply, this is what it currently covers:
+          </p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th></th><th>A2 Ultra</th><th>G1 Edu</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>gestures</td><td>agibot_a2_motion_player</td><td>unitree_g1_arm_actions</td></tr>
+                <tr><td>head screen</td><td>agibot_emoticon_player</td><td>&mdash;</td></tr>
+                <tr><td>visual UI</td><td>&mdash;</td><td>unitree_g1_audio_led</td></tr>
+                <tr><td>temperature</td><td>&mdash;</td><td>unitree_lowstate</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>One Codebase, Two Robots: Platform Abstraction</h2>
+          <p>
+            Nothing in the conversation logic asks "is this an X2, an A2, or something else?" That question is
+            answered once, at startup, when the system selects a robot profile that wires in the correct backend
+            implementations:
+          </p>
+          <ul>
+            <li>AgiBot X2 Ultra's audio hardware lives on a separate physical computer (PC3) from the AI system, so its bridge has to reach across the network instead of opening a local device;</li>
+            <li>AgiBot A2 Ultra uses a local PortAudio bridge that opens the microphone and speaker directly on the same box the AI system runs on;</li>
+            <li>X2 drives its gestures and face display through its own AimDK integration; A2 has an independently-implemented gesture and head-screen backend of its own, going through a completely different vendor API (below);</li>
+            <li>Camera access on AgiBot robots goes through ROS image topics rather than raw device files;</li>
+            <li>Any capability not supported on a given model is simply disabled for that run, without taking the rest of the system down with it &mdash; see the capability-map mechanism above.</li>
+          </ul>
+          <p>
+            Conversation, RAG, personas, the supervisor, and the frontend stay the same across robots. Only the thin
+            layer that touches the hardware changes. For the A2, the work was mostly writing adapters rather than
+            rebuilding the system.
+          </p>
+
+          <h2>Audio Bridge and LiveKit</h2>
+          <p>
+            The audio bridge is the component that turns a physical robot into a LiveKit participant. On each
+            robot it is responsible for:
+          </p>
+          <ul>
+            <li>Capturing audio from the robot's physical microphones;</li>
+            <li>Converting that capture into a mono LiveKit audio track;</li>
+            <li>Receiving TTS audio back from the LiveKit room;</li>
+            <li>Routing it to the physical speaker;</li>
+            <li>Exposing a small local control API for status, mute, gain, and clearing the playback buffer.</li>
+          </ul>
+          <p>
+            The two robots solve this differently, because their computers aren't laid out the same way. On the X2,
+            the microphones and speaker are physically wired to PC3, while the voice agent runs on PC2 &mdash; so
+            every frame of audio has to cross that machine boundary before it's useful to anything AI-related. That
+            remote bridge is real and working (it's what you hear in the videos on this page), but we don't have the
+            wire-level details of it documented here the way we do for the A2 below.
+          </p>
+          <p>
+            The A2's audio hardware sits on the same box as the AI system (the Orin), so its bridge is local: a
+            PortAudio process opens the microphone and speaker directly through the OS audio stack, no network hop
+            involved. The microphone is an 8-channel USB array &mdash; ALSA alias <code>mic48k</code>, exposed as
+            <code>hw:AIUIUSBMC,0</code> &mdash; running at 48&nbsp;kHz for both capture and output. Four of the eight
+            channels carry a strong voice signal and get mixed down to mono; the other four are quieter or reserved.
+            Two of those reserved channels are labeled, by the vendor, as an AEC reference pair &mdash; a raw
+            <code>arecord</code> capture confirms they carry real signal &mdash; but the bridge doesn't read them.
+            More on why in the next section.
+          </p>
+          <p>
+            Everything downstream runs on fixed frame sizes dictated by the echo canceller: 10&nbsp;ms APM frames
+            (480 samples at 48&nbsp;kHz) is what the AEC module requires, while PortAudio itself delivers audio in
+            100&nbsp;ms callback blocks (4,800 samples) that then get sliced down to that size. Playback keeps a
+            backlog capped at roughly 500&nbsp;ms, and stale buffered audio gets dropped outright on release or on
+            an interruption rather than played out late. RNNoise was evaluated and turned back off &mdash; on this
+            hardware it was an extra CPU-heavy pass that wasn't worth what it bought in cleanliness.
+          </p>
+
+          <h2>Echo Cancellation and Letting the Robot Be Interrupted</h2>
+          <p>
+            One of the first problems we hit was self-echo. With an open microphone, the robot hears its own speaker,
+            transcribes that audio as user speech, and starts answering itself. In a live demo, the result is as
+            awkward as it sounds.
+          </p>
+          <p>
+            The fix is a proper acoustic echo canceller built on the WebRTC Audio Processing Module. Conceptually,
+            it needs two signals: the <strong>far-end</strong> signal, which is the audio being sent to the
+            speaker, and the <strong>near-end</strong> signal, which is the microphone &mdash; containing the
+            human speaker, ambient noise, and the robot's own voice bleeding back in. AEC estimates the speaker's
+            contribution to the microphone signal and subtracts it out.
+          </p>
+          <p>
+            On the A2, that reference signal is built in software rather than read from hardware. The bridge
+            instantiates LiveKit's WebRTC Audio Processing Module with echo cancellation turned on, and feeds it a
+            reverse stream assembled from whatever audio was actually just sent to the speaker &mdash; even though,
+            as noted above, the mic array physically exposes a hardware reference pair the bridge simply doesn't
+            use. Software-derived reference, continuously running, is the primary defense.
+          </p>
+          <p>
+            It isn't the only one. A second, much simpler mechanism runs alongside it as a belt-and-suspenders
+            check: a timing gate that suppresses capture for a fixed window after the speaker stops &mdash; about
+            500&nbsp;ms by default &mdash; independent of what the APM decided. It's crude compared to the
+            continuous AEC, but it catches the case where a stray tail of playback leaks through right at the
+            end of an utterance, which is exactly the kind of edge case that turns into "robot answers itself"
+            in front of an audience.
+          </p>
+          <p>
+            With both of those in place, a person can interrupt the robot mid-sentence: the LiveKit agent detects
+            the user's speech over the echo-cancelled microphone signal, immediately stops TTS playback, and
+            transitions into a listening state.
+          </p>
+          <div class="post-callout">
+            Self-echo and barge-in are closely related. A simple mute-while-speaking toggle stops the feedback, but
+            it also makes the robot deaf while it talks. Continuous AEC plus a short timing backstop is what allows
+            both to work at once.
+          </div>
+
+          <h3>Architecture: Confirming a Real Interrupt</h3>
+          <p>
+            A naive version of barge-in just watches microphone energy while the robot is talking and stops as soon
+            as it sees a spike. In practice that's too trigger-happy: a residual echo blip that AEC didn't fully
+            cancel, a cough, or someone talking to a neighbor a few meters away is enough to cut the robot off for no
+            reason. Reacting instantly to a single noisy frame produces a robot that stutters constantly instead of
+            one that listens well.
+          </p>
+          <p>
+            What actually runs is closer to a small state machine:
+          </p>
+<pre><code>speaking state
+  -> VAD runs continuously on the post-AEC mic signal
+  -> candidate speech energy must hold for a short debounce window
+  -> debounce passes -> confirmed interrupt
+  -> TTS synthesis halted at the current chunk boundary
+  -> playback buffer flushed (queued audio discarded, not played out)
+  -> stop signal sent down the playback path
+  -> state -> listening</code></pre>
+          <p>
+            The debounce window is the main tuning knob. Too short, and background noise or echo artifacts still
+            trigger false interrupts; too long, and a genuine interruption feels laggy and unresponsive. We tuned it
+            empirically against a target interrupt latency budget of a few hundred milliseconds &mdash; short enough
+            to feel immediate, long enough to filter out single-frame noise. Flushing the playback buffer matters
+            just as much as detecting the interrupt: without it, audio already queued for playback keeps
+            coming out of the speaker for a moment after the agent has already "decided" to stop, which breaks the
+            illusion completely.
+          </p>
+
+          <h2>Stable Playback: Getting Rid of the Choppiness</h2>
+          <p>
+            Choppy playback makes the whole interaction feel broken, even when the transcription and answer are
+            correct. There wasn't one fix; several smaller changes had to work together:
+          </p>
+          <ul>
+            <li>Scheduling playback against an absolute clock instead of accumulating drift over time;</li>
+            <li>Packing multiple audio samples into 40&nbsp;ms DDS messages instead of sending a flood of tiny packets;</li>
+            <li>An adaptive jitter pre-buffer that absorbs network and processing jitter before playback starts;</li>
+            <li>A bounded playback buffer, so latency can't silently grow without limit;</li>
+            <li>Explicit tracking of late arrivals, underruns, and overruns as first-class events, not just symptoms;</li>
+            <li>Dropping stale audio outright once latency exceeds a hard budget, rather than playing it late;</li>
+            <li>Keeping the playback thread separate from capture and network processing, so one slow path can't stall another.</li>
+          </ul>
+          <p>
+            Removing audible glitches wasn't enough. Audio that arrives a few hundred milliseconds late can sound
+            clean and still ruin the timing of the conversation, so stale frames are dropped instead of played.
+          </p>
+
+          <h2>The Voice AI Pipeline</h2>
+          <p>
+            Put together, capture, understanding, and synthesis form one continuous loop:
+          </p>
+<pre><code>microphone
+  -> audio bridge
+  -> LiveKit
+  -> VAD
+  -> STT
+  -> turn detection
+  -> intent / RAG decision
+  -> LLM
+  -> text normalization
+  -> TTS
+  -> LiveKit
+  -> audio bridge
+  -> speaker</code></pre>
+          <p>
+            Speech-to-text supports both Serbian and English, including code-switching, and includes filtering for
+            common recognition errors, correction for known proper names, and handling for Serbian names spoken
+            inside otherwise English sentences.
+          </p>
+          <p>
+            Before anything reaches the TTS engine, the text-normalization layer rewrites numbers, dates,
+            abbreviations, company names, terms like "AI," and the handful of words a given synthesizer is known to
+            mispronounce. Text is streamed to TTS in meaningful chunks so speech can start early without sacrificing
+            natural intonation. The pipeline supports multiple TTS providers and voices, including Soniox and
+            ElevenLabs, selectable per persona or per event.
+          </p>
+
+          <figure class="post-media post-video">
+            <video src="../videos/x2-conversation-english.mp4" muted loop playsinline preload="metadata" controls>
+              Your browser does not support the video tag. You can
+              <a href="../videos/x2-conversation-english.mp4">download the clip here</a>.
+            </video>
+            <figcaption>The same pipeline running in English: STT, RAG, TTS, and gesture requests like "wave" and "give me your hand."</figcaption>
+          </figure>
+
+          <h2>RAG and Knowledge Bases</h2>
+          <p>
+            The robot doesn't answer everything out of the LLM's general knowledge. For anything specific &mdash;
+            company facts, people, locations, event details &mdash; it retrieves grounded context first. The RAG
+            service combines:
+          </p>
+          <ul>
+            <li>A BGE-M3 embedding model for semantic search;</li>
+            <li>Qdrant as the vector store, over a widened candidate set rather than a narrow top-k;</li>
+            <li>Lexical/fuzzy scoring alongside the semantic score;</li>
+            <li>A fused score that blends semantic and textual relevance;</li>
+            <li>An entity and alias dictionary, so names and nicknames resolve correctly;</li>
+            <li>A tightly bounded context window handed to the LLM, to keep answers grounded and fast.</li>
+          </ul>
+          <p>
+            This is what lets the robot answer questions like who a specific person at the company is, where the
+            reception, cafeteria, or coffee area is, general facts about the company and its teams, event-specific
+            content, or even a temporary demo collection like sports analysis notes prepared for a single event.
+          </p>
+          <p>
+            The supervisor lets an operator choose a persona together with one or more knowledge collections,
+            upload PDF documents, browse and re-index content, and search it directly. Casual small talk is
+            handled without touching RAG at all, purely to keep latency down; factual questions route through the
+            knowledge base instead.
+          </p>
+
+          <h2>The Supervisor: Mission Control</h2>
+          <p>
+            The Robot Supervisor is the interface we use to run the platform. It has a FastAPI backend and a React
+            frontend. From it, an operator can:
+          </p>
+          <ul>
+            <li>Start, stop, and restart individual services;</li>
+            <li>See live status, uptime, and logs;</li>
+            <li>Start and end conversations;</li>
+            <li>Follow the LiveKit transcript in real time;</li>
+            <li>Control microphone and speaker state, gain, and mute;</li>
+            <li>Choose STT language and TTS voice;</li>
+            <li>Edit personas, greetings, and goodbye messages;</li>
+            <li>Select RAG collections and manage documents;</li>
+            <li>Run quizzes and polls;</li>
+            <li>Configure the camera and vision controller;</li>
+            <li>Manage the database of recognized people;</li>
+            <li>Trigger pre-built event scenarios;</li>
+            <li>Send gestures and other controlled robot commands.</li>
+          </ul>
+          <p>
+            During an event, the operator uses it to watch what the robot hears, switch knowledge collections, and
+            step in when something needs a manual push. The Supervisor owns and persists the user-facing
+            configuration &mdash; personas, RAG collections, greetings, event scripts; individual services underneath
+            it keep their own technical parameters. This keeps the Supervisor independent of the robot model.
+          </p>
+
+          <h3>Architecture: Switching Without Restarting</h3>
+          <p>
+            Persona and RAG collection are not compiled into the running voice-agent process; they're rows in the
+            Supervisor's config store. The agent doesn't get restarted to pick up a change &mdash; it reads current
+            config at well-defined points instead of caching it for the process lifetime:
+          </p>
+          <ul>
+            <li>A persona or collection change made in the Supervisor UI is written to the config store immediately;</li>
+            <li>The active conversation keeps using whatever was loaded for the turn already in progress;</li>
+            <li>At the next turn boundary, the agent re-reads its active persona and RAG collection selection before building the next prompt;</li>
+            <li>Swapping a RAG collection only changes which Qdrant collection name(s) the retrieval step queries &mdash; there's no reindexing involved, so it's effectively instant.</li>
+          </ul>
+          <p>
+            The one thing that does need an explicit decision is conversation history: switching persona mid-event
+            can mean very different things depending on whether the new persona should see what was already said.
+            That's handled as config too, not a hardcoded choice &mdash; some scenarios reset history on persona
+            switch, others deliberately carry it forward.
+          </p>
+
+          <h2>Camera and Computer Vision</h2>
+          <p>
+            AgiBot cameras aren't opened as raw <code>/dev/video</code> devices. A dedicated camera bridge
+            subscribes to a ROS image topic and republishes that video into the LiveKit room. On the A2, that's ROS 2
+            Humble over a dedicated DDS domain (<code>ROS_DOMAIN_ID=232</code>, its own FastDDS profile), with five
+            distinct camera streams:
+          </p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Stream</th><th>Topic</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Chest left fisheye</td><td><code>/aima/hal/fish_eye_camera/chest_left/color</code></td></tr>
+                <tr><td>Chest right fisheye</td><td><code>/aima/hal/fish_eye_camera/chest_right/color</code></td></tr>
+                <tr><td>Interactive (chest, main)</td><td><code>/aima/hal/camera/interactive/color/h264</code></td></tr>
+                <tr><td>Head front RGB-D</td><td><code>/aima/hal/rgbd_camera/head_front/color</code></td></tr>
+                <tr><td>Waist front RGB-D</td><td><code>/aima/hal/rgbd_camera/waist_front/color</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The chest-centre interactive stream is worth a specific mention, mostly as a cautionary tale: it's the
+            only one of the five that never publishes a plain <code>sensor_msgs/Image</code> or a
+            <code>/compressed</code> topic &mdash; only H.264 (<code>foxglove_msgs/CompressedVideo</code>). It also
+            didn't work for a long time, and the reason was almost funny: the code was subscribing to a
+            <code>.../color</code> topic that doesn't exist for this stream, which succeeds silently at subscribe
+            time and just times out later instead of failing loudly.
+          </p>
+          <p>
+            Resolutions vary per stream and aren't all measured. The interactive camera's native output is
+            1920&times;1536 (a 5:4 sensor); we publish it at 1280&times;1024 rather than letting it get stretched
+            into 16:9. The head-front RGB-D stream behaves, from the detector's point of view, like a 640&times;480
+            wide-angle fisheye &mdash; that's inferred from person-lock tolerances measured in production (roughly
+            19&nbsp;px of drift at 480 tall by 640 wide), not from a spec sheet. The service's own default publish
+            target is 1280&times;720 at 30&nbsp;fps, though real detector throughput on this hardware runs closer to
+            7&ndash;15&nbsp;fps. We don't have measured native resolutions for the chest fisheye or waist RGB-D
+            streams to report here.
+          </p>
+          <p>
+            X2 has its own camera bridge and ROS image topics, but we don't have the same level of topic-by-topic
+            detail traced for it as we do above for the A2.
+          </p>
+          <p>
+            The Vision Controller is asynchronous, so a slow recognition step can't hold up the conversation:
+          </p>
+          <ul>
+            <li>Frames are pulled continuously rather than on demand;</li>
+            <li>The most recent frame is handed to a person detector;</li>
+            <li>YOLO detects people in frame;</li>
+            <li>ByteTrack maintains identity for tracked people across frames;</li>
+            <li>Presence events fire immediately, without waiting for face recognition to finish;</li>
+            <li>A separate, slower identity worker runs face detection, generates a face embedding, and compares it against enrolled identities in the background;</li>
+            <li>An identity is only confirmed after several consecutive matching results, not a single lucky frame;</li>
+            <li>Face recognition never blocks the start of a conversation.</li>
+          </ul>
+          <p>
+            The heavier work &mdash; face detection, embedding, and matching &mdash; never blocks the
+            fast person-detection loop that decides whether someone is present. The Supervisor also reports an
+            explicit startup/warming-up state while the vision models and camera stream are still coming online,
+            rather than marking the service ready before it can actually deliver a usable frame. Once an identity is
+            confirmed, re-scanning that same person is throttled to cut GPU load &mdash; there's no
+            need to keep re-running face matching every frame once the system already knows who it's looking at.
+            Thresholds, scan frequencies, and which models are loaded all come from configuration, not from
+            anything hardcoded in the UI layer.
+          </p>
+          <p>
+            That pipeline supports automatically starting a conversation when
+            someone approaches, detecting when they leave, recognizing known people, consent-based enrollment,
+            deletion of a stored face on request, and linking a display name, canonical identity, group, reference
+            photo, and conversation hint together. Distinct groups can be defined for specific events &mdash; for a
+            recent summer IT camp, a larger batch of participants was imported directly from a spreadsheet and a
+            folder of photos ahead of time. When the system recognizes someone from that group, their identity and
+            an allowed conversation hint can be passed to the active persona so the LLM can open the conversation
+            naturally, instead of asking "who are you?" every single time.
+          </p>
+          <div class="post-callout">
+            Unknown faces are never enrolled automatically. Saving a face always requires explicit consent from the
+            person being added.
+          </div>
+
+          <h3>Architecture: Keeping Detection Off the Critical Path</h3>
+          <p>
+            The failure mode we were explicitly designing against is a slow vision step stalling everything behind
+            it &mdash; a face-matching call that takes 300&nbsp;ms shouldn't mean the robot takes 300&nbsp;ms to
+            notice someone walked up to it. That's why capture, detection, and identity resolution run as separate
+            stages connected by bounded queues instead of one synchronous call chain:
+          </p>
+          <ul>
+            <li>The ROS image callback thread only ever does one thing: drop the frame into a small, bounded queue. It never blocks on inference.</li>
+            <li>A drop-oldest policy applies once that queue is full, so a temporary slowdown loses a few stale frames instead of building an ever-growing backlog and increasing latency over time;</li>
+            <li>YOLO detection and ByteTrack run on their own worker, consuming the freshest available frame;</li>
+            <li>Because ByteTrack keeps a stable track ID per person, the slower identity worker only needs to run face matching once per track rather than once per frame &mdash; it doesn't re-identify someone on every single frame they're visible;</li>
+            <li>Presence and absence both go through a short hysteresis window, so someone briefly stepping out of frame &mdash; or a single missed detection &mdash; doesn't flicker the "person left" event on and off.</li>
+          </ul>
+          <p>
+            The net effect is that the fast path (is someone there, roughly where) and the slow path (who exactly is
+            it) are decoupled on purpose, and a hiccup in the slow path degrades identification, not presence
+            detection.
+          </p>
+
+          <h2>Remembering People</h2>
+          <p>
+            Detecting a face isn't very useful unless the conversation can do something with the result. The
+            Supervisor has a People tab where each known person is stored with:
+          </p>
+          <ul>
+            <li>The name the robot actually speaks out loud;</li>
+            <li>A canonical identity used for RAG lookups;</li>
+            <li>Additional aliases;</li>
+            <li>Reference photos;</li>
+            <li>A group or event they belong to;</li>
+            <li>A short note or "fun fact" the persona is allowed to use;</li>
+            <li>How the available reference photos should be compared.</li>
+          </ul>
+          <p>
+            The face embedding powers visual recognition, but the canonical identity
+            connects a recognized person to the conversation and the knowledge base. That's what lets a question
+            like "what do you know about me?" get expanded into a real RAG query built around that person's full
+            identity, instead of the system having nothing more to go on than the pronoun "me."
+          </p>
+          <p>
+            For someone the robot doesn't yet know, enrollment is a controlled conversation rather than a silent
+            background capture: the robot first asks the person's name, then explicitly asks for consent to
+            remember their face, and only after that does it store a reference photo and embedding. Nothing is
+            enrolled without that exchange happening first.
+          </p>
+          <p>
+            Greetings follow the language set in the Supervisor's Speech configuration. The system waits briefly
+            for identification before greeting, then produces one greeting and one LLM response. This avoids a race
+            where recognition and conversation startup cause the robot to greet the same person twice.
+          </p>
+
+          <figure class="post-media post-video">
+            <video src="../videos/x2-face-recognition-memory.mp4" muted loop playsinline preload="metadata" controls>
+              Your browser does not support the video tag. You can
+              <a href="../videos/x2-face-recognition-memory.mp4">download the clip here</a>.
+            </video>
+            <figcaption>X2 recognizing a previously enrolled person and using their stored identity to talk about them by name.</figcaption>
+          </figure>
+
+          <h2>Gestures: A Safety Layer Between Language and Hardware</h2>
+          <p>
+            The gesture bridge keeps the LLM away from anything that could move the robot in an unvalidated way.
+            The flow is narrow by design:
+          </p>
+<pre><code>LLM / supervisor
+  -> semantic gesture name
+  -> gesture catalog
+  -> safety pool
+  -> robot-specific backend
+  -> AimDK / ROS service</code></pre>
+          <p>
+            The LLM is never given motion IDs, joint angles, or arbitrary trajectories. It can only request
+            semantic commands &mdash; things like <em>wave</em>, <em>handshake</em>, <em>kiss</em>,
+            <em>hand heart</em>, or <em>nod</em> &mdash; and only if that gesture is currently allowed by the
+            active catalog.
+          </p>
+          <p>
+            The LLM signals a gesture by embedding a small control token in its response text
+            &mdash; that token is stripped out before the text ever reaches TTS or the visible transcript, and is
+            dispatched to the gesture bridge asynchronously, so a gesture request never delays or interrupts speech.
+          </p>
+          <p>
+            On the X2, preset motions are dispatched through an AimDK ROS service,
+            <code>/aimdk_msgs/srv/SetMcPresetMotion</code>. For the more natural-looking gestures &mdash; the ones
+            that play while the robot is explaining something rather than reacting to a single word &mdash; the
+            source material isn't a vendor preset at all. We recorded ourselves performing the motions and ran that
+            footage through LinkCraft, which converts video into a robot animation rather than requiring anyone to
+            hand-author keyframes. On top of the recorded gestures, we layered in idle animations so the robot
+            doesn't sit dead-still between turns. Once first TTS audio frame is ready, the agent sends only
+            the estimated duration of the upcoming speech, and the gesture bridge picks a pre-approved animation of
+            roughly matching length and starts it asynchronously, without ever blocking the voice pipeline.
+            The robot's factory voice agent is kept separate from this flow so its
+            own built-in Chinese/English voice never mixes in with LiveKit TTS output &mdash; while the underlying
+            motion layer it relies on stays available to our system.
+          </p>
+          <p>
+            This lets the robot wave on greeting, offer a handshake, form a heart with its hands, send
+            a kiss, nod or turn its head, and use light speaking gestures while explaining something. Contact-based
+            and more dynamic motions are restricted by safety profiles and physical validation before they're ever
+            added to the active catalog.
+          </p>
+          <figure class="post-media post-video">
+            <video src="../videos/x2-handshake-gesture.mp4" muted loop playsinline preload="metadata" controls>
+              Your browser does not support the video tag. You can
+              <a href="../videos/x2-handshake-gesture.mp4">download the clip here</a>.
+            </video>
+            <figcaption>X2 offering a handshake: a safety-pool gesture dispatched through the AimDK ROS service.</figcaption>
+          </figure>
+
+          <p>
+            The A2 shares the same voice, RAG, camera, and supervisor layers as the X2, but its gesture backend is a
+            completely separate implementation, going through the vendor's motion-command API instead of AimDK.
+            Semantic gesture names still enter the same way &mdash; from the LLM or the Supervisor &mdash; but on the
+            A2 they resolve to:
+          </p>
+<pre><code>POST http://192.168.100.100:56444/rpc/aimdk.protocol.MotionCommandService/SendMotionCommand
+     {motion_id, duration_ms, cmd_end, cmd_pause, cmd_reset}</code></pre>
+          <p>
+            The preset catalog isn't hardcoded. It's discovered lazily by calling <code>ResourceService/GetMotion</code>
+            on the Orin and matching entries by keyword against each preset's <code>display_name_en</code>. Twenty
+            curated semantic names are mapped this way onto the vendor's full catalog &mdash; 133 entries on this
+            specific A2 unit, last verified live on 2026-08-03. A gesture that doesn't match anything in that catalog
+            is simply unavailable; there's no synthetic fallback. Duration is capped defensively too: 5&nbsp;seconds
+            by default, 6&nbsp;seconds as a hard ceiling, with three named exceptions &mdash; the "Hall of Fame"
+            routines &mdash; allowed to run 22, 25, and 29 seconds, capped at 23, 26, and 30. AIMA doesn't expose a
+            verified playback-speed field, so rather than trying to stretch a short preset to fill more time, longer
+            gestures just use a native routine that already runs that long.
+          </p>
+
+          <h2>Two Motion APIs, One Opaque Vendor Stack</h2>
+          <p>
+            The preset endpoint above is the only motion path wired into anything user-facing on the A2. But it
+            isn't the only way to move the arms &mdash; there's a second, free-form joint-control API that works
+            fine on its own and simply isn't connected to the gesture system, the LLM, or perception. It's a
+            useful case study in how much a vendor stack can hide behind an HTTP 200.
+          </p>
+          <p>
+            That API is <code>McMotionService</code> on port 56322 (<code>JointControl</code>,
+            <code>PlanningMove</code>, <code>JointMove</code>, <code>GoHomePose</code>). Three things about it are
+            worth knowing if you're ever debugging "the RPC succeeded but the robot didn't move":
+          </p>
+          <ul>
+            <li><strong>The <code>control_source</code> header has to match the motion controller's current work mode.</strong> If it doesn't, the HTTP call still returns <code>code: 0</code> &mdash; success &mdash; and the motion is silently dropped. Internal docs call this out directly as the number one cause of that exact symptom.</li>
+            <li><strong>The motion controller is an action state machine, not a stateless endpoint.</strong> After boot it sits in <code>McAction_DEFAULT</code>, where external arm commands are accepted at the HTTP layer but the underlying task is never actually scheduled &mdash; <code>GetTaskState</code> reports <code>CommonState_UNKNOWN</code> forever, with no error anywhere. You have to explicitly <code>SetAction</code> into a mode that allows external upper-body control before anything will move.</li>
+            <li><strong>The motion planner enforces its own joint limits, separate from the URDF.</strong> If any joint in a requested trajectory falls outside those planner-specific bounds, the whole trajectory is rejected &mdash; again with <code>code: 0</code>. The only trace is a <code>[Warn]</code> line in <code>/agibot/log/pnc_arm/pnc_arm.log</code> on the x86 box.</li>
+          </ul>
+          <p>
+            None of these are things a client can detect from the response alone. All three came out of just trying
+            to move the arm and watching it not move.
+          </p>
+          <p>
+            The arm itself has 26 controllable joints, verified live on this unit: six per leg, seven per arm (the
+            first three are shoulder flexion, abduction, and upper-arm roll; the fourth is the elbow; the last three
+            are the wrist, on a parallel linkage that isn't modeled as a simple serial chain in the URDF). The head
+            is fixed on this body variant. The elbow can never be commanded fully straight &mdash; the joint has a
+            built-in minimum bend of about 1.7&deg;. And there is no hand or gripper anywhere in this: not in the
+            joint table, not in any limit definition, not behind any endpoint this code talks to. Every one of those
+            26 joints stops at the wrist.
+          </p>
+
+          <h2>Visual Reactions on the Face Display</h2>
+          <p>
+            The LiveKit agent tracks a small set of conversational states &mdash; listening, thinking, speaking,
+            and scanning. On the X2, those states map onto the robot's native face UI through a ROS service,
+            <code>/face_ui_proxy/play_emoji</code>. The face changes expression while the robot listens, looks
+            something up, talks, or scans for a face, and multiple animation variants are rotated per state so the
+            screen doesn't loop the exact same expression on every turn.
+          </p>
+          <p>
+            The visual layer is separate from speech. If the face UI service stops responding, the conversation
+            keeps going.
+          </p>
+
+          <h3>Architecture: A Decoupled, Debounced State Machine</h3>
+          <p>
+            Two things had to be true for this layer to be worth having instead of a liability. First, it can never
+            be allowed to slow the conversation down &mdash; the call to <code>/face_ui_proxy/play_emoji</code> is
+            fire-and-forget from the agent's side, with a short timeout; if the face UI service is slow or down, the
+            agent simply moves on without waiting for a response. Second, conversational state changes fast enough
+            (VAD flipping listening/speaking several times a second during natural pauses) that mapping every raw
+            state transition straight to a face animation would make the display flicker constantly.
+          </p>
+          <p>
+            The fix is a minimum dwell time per state: once the face UI shows "thinking," it stays there for at
+            least a short floor duration even if the underlying agent state technically flips back and forth
+            underneath it. Only a transition that survives past that floor actually triggers a new animation. Within
+            a state, the specific animation clip is chosen from a small pool rather than always the same one, purely
+            so the display doesn't loop an identical loop on every single turn of a long conversation.
+          </p>
+          <p>
+            The A2's head screen is a separate integration again &mdash; the state-machine logic above is ours and
+            robot-agnostic, but what it talks to on the A2 is the vendor's own <code>rc_module</code> service
+            (<code>RcEmoticonPlayerService</code>, on the x86 box at port 59001) instead of an AimDK call. It's the
+            <code>agibot_emoticon_player</code> backend referenced earlier, and it's been verified live and working
+            on hardware as recently as 2026-08-25.
+          </p>
+
+          <h2>Personas, Events, Quizzes, and Polls</h2>
+          <p>
+            We didn't want a separate Python file for every use case. A prompt/persona layer defines a
+            robot's identity, tone, response length, language, allowed topics, how and when it's permitted to use
+            RAG, how it should behave differently around children versus adults, gesture guidelines, and general
+            guardrails.
+          </p>
+          <p>
+            Several personas are already in active use: a Comtrade company ambassador, a sports-focused
+            conversational persona, "Lumi" &mdash; a persona designed for children, and a set of event and
+            onboarding scenarios built for specific occasions. The supervisor can switch between them without any
+            code changes. On top of persona switching, it also supports short quizzes, polls, and scripted event
+            sequences, where an operator predefines text, pauses, and gestures ahead of time and then simply
+            triggers the sequence with a button during the event itself.
+          </p>
+
+          <h2>Teleoperation</h2>
+          <p>
+            Separate from the conversational stack, we also built a teleoperation prototype for the PICO 4 Ultra
+            using WebXR. The browser streams headset pose, controller pose, triggers,
+            grips, and thumbstick input over a WebSocket connection to a teleoperation service running on X2's
+            development computer (PC2).
+          </p>
+          <p>So far, we've tested the following on hardware:</p>
+          <ul>
+            <li>Connecting a PICO headset to the WebXR client;</li>
+            <li>Continuously streaming controller poses with low enough latency to be usable;</li>
+            <li>Calibrating a neutral pose as the reference point for tracking;</li>
+            <li>Driving head movement through the corresponding motion-control interface.</li>
+          </ul>
+          <p>
+            Arm control took longer. Early on, activating the robot's factory VR mode would bring the arms to
+            a default pose, but reliably mapping controller motion onto the robot's actual joints wasn't finished
+            yet. Since then, arm teleoperation has been brought online on the X2 as well &mdash; it's a recent
+            result, not a long-running production capability, and it still deserves the same caution as any new
+            motion path on a physical robot.
+          </p>
+          <p>
+            The safety pipeline arm control has to go through looks like this:
+          </p>
+<pre><code>PICO hand target
+  -> coordinate transform
+  -> inverse kinematics
+  -> workspace &amp; joint-limit clamping
+  -> rate limiting
+  -> vendor motion-control channel</code></pre>
+          <p>
+            Raw HAL commands are too low-level for arm teleoperation; sending joint targets straight through leaves
+            no safety margin. The system needs a dead-man control that halts motion
+            the instant operator input stops, neutral-pose calibration before anything moves, a controlled return
+            to a safe pose when a session ends, and it must never touch the stabilization processes running on
+            X2's motion computer (PC1). This isn't an autonomous mode; a person is driving the robot the whole time.
+          </p>
+
+          <h2>What's Stable and What's Still Experimental</h2>
+          <p>
+            Some parts have already held up under repeated event use. Others are still experimental:
+          </p>
+          <p><strong>Stable:</strong></p>
+          <ul>
+            <li>Two-way LiveKit conversation on both robots;</li>
+            <li>Echo cancellation and mid-speech barge-in;</li>
+            <li>A2's local PortAudio bridge, including its software AEC path;</li>
+            <li>RAG and knowledge-collection management;</li>
+            <li>Camera streaming;</li>
+            <li>Person detection and recognition;</li>
+            <li>Persisted identity/memory for known people;</li>
+            <li>X2's AimDK-based gesture catalog and face display;</li>
+            <li>A2's independent gesture catalog (SendMotionCommand) and head-screen backend (rc_module), verified live 2026-08-25;</li>
+            <li>Supervisor control over services and configuration.</li>
+          </ul>
+          <p><strong>Experimental:</strong></p>
+          <ul>
+            <li>Reactions triggered by human movement observed through the camera;</li>
+            <li>LinkCraft-sourced speaking animations across every motion state;</li>
+            <li>PICO-based teleoperation, including the recently-enabled arm control on X2;</li>
+            <li>Free-form joint control on A2's arms (outside the gesture catalog) &mdash; works, but isn't wired into anything user-facing;</li>
+            <li>Whatever A2's arm-movement demo below turns out to actually be &mdash; the mechanism behind it isn't traced in the codebase yet.</li>
+          </ul>
+          <div class="post-callout">
+            Here, "experimental" means tested on hardware but still evolving. We don't yet treat these features as
+            finished parts of the platform.
+          </div>
+
+          <h2>Engineering Lessons</h2>
+          <ol>
+            <li>Connecting real-time AI to physical hardware was much harder than wiring up the LLM.</li>
+            <li>Audio echo, jitter, latency, and turn detection have an outsized effect on how natural a robot feels to talk to.</li>
+            <li>Keep the control plane and the media plane separate; conflating them makes both harder to reason about.</li>
+            <li>Robot-specific code belongs behind small, replaceable adapters, not scattered conditionals.</li>
+            <li>Motion commands must be semantic, validated, and fail-safe &mdash; never raw trajectories from a language model.</li>
+            <li>Vision and face recognition must never block the start or flow of a conversation.</li>
+            <li>For event work, an operator needs a supervisor tool; a terminal and live logs aren't enough.</li>
+            <li>Every subsystem should fail in isolation: a broken camera, a RAG outage, a gesture failure, or a dead display should never take the conversation down with it.</li>
+            <li>A natural interaction depends on voice, gaze, expression, gesture, and context working together. LLM answer quality is only one part of it.</li>
+            <li>A successful HTTP response from a vendor motion API doesn't mean the robot moved. Wrong work mode, wrong action state, an out-of-bounds trajectory &mdash; all three can come back as <code>code: 0</code>. Treat "no motion" as its own failure mode, distinct from an error.</li>
+          </ol>
+
+          <h2>A2: An Arm-Movement Demo We Can't Fully Trace Yet</h2>
+          <p>
+            The A2 has also been recorded doing something that looks like reaching for and handling a cup. It would
+            be easy to caption that as a manipulation demo; it's more honest to say we don't have a traced call path
+            for it. Nothing that looks like grasp planning, object detection for manipulation, or a pick-and-place
+            routine exists anywhere in the platform code we searched.
+          </p>
+          <p>
+            What does exist, and is the closest confirmed thing to it, is a pair of scripts &mdash;
+            <code>a2_arm_raise.py</code> and <code>a2_arm_stretch.py</code> &mdash; that drive the arm through the
+            free-form joint-control path described above (<code>McMotionService/PlanningMove</code>), run in dry-run
+            mode by default and throttled to 12% velocity scale when actually executed. They raise and stretch the
+            arm; they don't grasp anything.
+          </p>
+          <p>
+            And there's a harder constraint underneath all of this: as covered above, this platform's joint tables
+            stop at the wrist on both arms. There is no hand or gripper interface exposed anywhere in the code this
+            system talks to. Whatever the video shows, it isn't autonomous grasping running through anything traced
+            here &mdash; it's either an opaque vendor preset outside what we've mapped (plausible, since presets are
+            black boxes by design), or something staged. We'd rather say that plainly than dress up a two-script
+            arm routine as a manipulation pipeline.
+          </p>
+
+          <figure class="post-media post-video">
+            <video src="../videos/a2-cup-grasp-demo.mp4" muted loop playsinline preload="metadata" controls>
+              Your browser does not support the video tag. You can
+              <a href="../videos/a2-cup-grasp-demo.mp4">download the clip here</a>.
+            </video>
+            <figcaption>AgiBot A2 Ultra handling a cup on camera &mdash; the exact mechanism behind this clip isn't traced in the codebase, and the platform exposes no hand or gripper interface at all.</figcaption>
+          </figure>
+
+          <h2>Where This Is Headed</h2>
+          <p>
+            The project now has one conversation engine, one knowledge layer, one supervisor, and a set of hardware
+            adapters for two different humanoid robots. X2 and A2 don't behave identically because their hardware
+            isn't identical. The important part is that adding the A2 didn't mean starting over. The next robot,
+            event, or persona should be another extension of the same platform rather than another one-off build.
+          </p>
+          <p>
+            The next concrete step is adding LIDAR alongside the existing cameras, primarily on the A2, so the robot
+            can navigate autonomously instead of staying put and waiting for people to approach. Everything in this
+            post &mdash; voice, vision, gestures, memory &mdash; assumes a robot that's already standing where it
+            needs to be. Giving it the ability to move itself there is the next real expansion of the platform,
+            not a variation on what's already built.
+          </p>
+
+          <figure class="post-media post-video">
+            <video src="../videos/a2-conversation-demo.mp4" muted loop playsinline preload="metadata" controls>
+              Your browser does not support the video tag. You can
+              <a href="../videos/a2-conversation-demo.mp4">download the clip here</a>.
+            </video>
+            <figcaption>AgiBot A2 Ultra running the same conversational AI pipeline as X2, over its local PortAudio bridge.</figcaption>
+          </figure>
+
+          <figure class="post-media">
+            <img src="../images/robots/X2Sitting.jpg" alt="AgiBot X2 buckled into the back seat of a car for transport" loading="lazy" />
+            <figcaption>X2, buckled in and ready for transport. Building the platform is serious work; getting the robot to the venue is not.</figcaption>
+          </figure>
+
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="ai-speak-blendshape-prediction.html">Next: Predicting ARKit-52 Blendshapes from Audio</a>
+          <a class="button button-primary" href="../blog.html">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+  <script>
+    (function () {
+      var videos = document.querySelectorAll(".post-media.post-video video");
+      if (!videos.length) return;
+
+      // Only one clip plays at a time.
+      videos.forEach(function (video) {
+        video.addEventListener("play", function () {
+          videos.forEach(function (other) {
+            if (other !== video && !other.paused) other.pause();
+          });
+        });
+      });
+
+      // Pause whatever is playing once it scrolls out of view.
+      var observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting && !entry.target.paused) {
+              entry.target.pause();
+            }
+          });
+        },
+        { threshold: 0.25 }
+      );
+      videos.forEach(function (video) { observer.observe(video); });
+    })();
+  </script>
+</body>
+</html>

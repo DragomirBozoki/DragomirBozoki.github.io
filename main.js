@@ -116,11 +116,23 @@ function renderRecent(posts) {
   const dateEl = document.querySelector("[data-recent-post-date]");
   const titleEl = document.querySelector("[data-recent-post-title]");
   const excerptEl = document.querySelector("[data-recent-post-excerpt]");
+  const imageEl = document.querySelector("[data-recent-post-image]");
 
   if (linkEl) linkEl.setAttribute("href", mostRecent.href);
   if (dateEl) dateEl.textContent = mostRecent.dateLabel;
   if (titleEl) titleEl.textContent = mostRecent.title;
   if (excerptEl) excerptEl.textContent = mostRecent.excerpt;
+
+  if (imageEl) {
+    if (mostRecent.heroImage) {
+      imageEl.src = mostRecent.heroImage;
+      imageEl.alt = mostRecent.title || "";
+      imageEl.hidden = false;
+    } else {
+      imageEl.hidden = true;
+      imageEl.removeAttribute("src");
+    }
+  }
 }
 
 function createTags(tags) {

@@ -1,5 +1,18 @@
 window.POSTS = [
   {
+    title: "Engineering an AI Platform for Humanoid Robots",
+    excerpt:
+      "How a single-robot voice agent grew into a shared framework driving AgiBot X2 Ultra and A2 Ultra: real-time voice, vision, gestures, and knowledge retrieval, engineered end to end.",
+    href: "posts/agibot-x2-a2-conversational-ai-humanoid-robots.html",
+    dateLabel: "August 2026",
+    publishedAt: "2026-08-26",
+    tags: ["Robotics", "Voice AI", "LiveKit", "Computer Vision"],
+    heroImage: "images/robots/x2-hero-square.jpg",
+    archiveTitle: "Engineering an AI Platform for Humanoid Robots",
+    archiveExcerpt:
+      "Inside the voice, vision, and gesture stack that lets two different humanoid robots listen, think, and respond in real time — audio bridges, echo cancellation, RAG, and a safety-first gesture layer.",
+  },
+  {
     title: "Predicting ARKit-52 Blendshapes from Audio",
     excerpt:
       "How an ensemble, a learned face refiner, and a deterministic blink module took us to second place at the AI-SPEAK 2026 competition.",
