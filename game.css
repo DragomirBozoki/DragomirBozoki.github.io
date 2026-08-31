@@ -145,6 +145,8 @@ body.game-scroll-lock {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.85rem 1.1rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.03em;
@@ -273,6 +275,44 @@ body.game-scroll-lock {
   }
   to {
     transform: translateY(var(--fall-distance, 60vh));
+  }
+}
+
+/* Round-cleared toast */
+
+.game-round-toast {
+  position: fixed;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.9rem;
+  opacity: 0;
+  pointer-events: none;
+  animation: game-toast-pop 1000ms ease-out forwards;
+}
+
+@keyframes game-toast-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 6px) scale(0.92);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.98);
   }
 }
 

@@ -61,16 +61,62 @@
       '<svg ' + ICON_ATTRS + '><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3Z"/></svg>',
   };
 
-  var GAME_DURATION_S = 28;
   var RARE_CHANCE = 0.14;
-  var FALL_CHANCE = 0.22;
+  var FALL_CHANCE = 0.4;
   var COLORS = ["orange", "purple", "blue", "red", "green"];
 
-  var root, field, foundEl, timeEl, resultEl, resultLineEl, resultMsgEl, resultScoreEl;
+  // Instead of one fixed countdown, the game runs in rounds: reach
+  // roundTarget points before roundTimeLeft hits zero and the round
+  // resets with a slightly higher bar and a slightly shorter clock,
+  // so a good player can keep going indefinitely. Miss the bar once
+  // and the run ends.
+  var ROUND_DURATION_S = 12;
+  var ROUND_DURATION_FLOOR_S = 6;
+  var ROUND_DURATION_STEP_S = 0.6;
+  var ROUND_TARGET_START = 60;
+  var ROUND_TARGET_GROWTH = 1.28;
+
+  var root, field, foundEl, goalEl, timeEl, resultEl, resultLineEl, resultMsgEl, resultScoreEl;
   var state = null;
+  var audioCtx = null;
 
   function isMobile() {
     return window.matchMedia("(max-width: 700px)").matches;
+  }
+
+  function ensureAudio() {
+    if (audioCtx) return audioCtx;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audioCtx = new Ctx();
+    } catch (e) {
+      audioCtx = null;
+    }
+    return audioCtx;
+  }
+
+  // A short synthesized "pop", not an audio file: two-parameter
+  // envelope on a sine oscillator, ~110ms, quiet by default. Rare
+  // collects get a slightly higher, brighter pop as extra feedback.
+  function playPop(isRare) {
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume().catch(function () {});
+
+    var now = ctx.currentTime;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(isRare ? 780 : 520, now);
+    osc.frequency.exponentialRampToValueAtTime(isRare ? 480 : 320, now + 0.09);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.16, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.12);
   }
 
   function buildDom() {
@@ -83,7 +129,8 @@
       '<div class="game-hud">' +
       '<div class="game-hud-stats">' +
       '<span>FOUND <span data-found>0</span></span>' +
-      '<span>TIME <span data-time>' + GAME_DURATION_S + "</span></span>" +
+      '<span>GOAL <span data-goal>0/' + ROUND_TARGET_START + "</span></span>" +
+      '<span>TIME <span data-time>' + ROUND_DURATION_S + "</span></span>" +
       "</div>" +
       '<button type="button" class="game-exit" data-exit aria-label="Exit game">EXIT</button>' +
       "</div>" +
@@ -104,6 +151,7 @@
 
     field = root.querySelector("[data-field]");
     foundEl = root.querySelector("[data-found]");
+    goalEl = root.querySelector("[data-goal]");
     timeEl = root.querySelector("[data-time]");
     resultEl = root.querySelector("[data-result]");
     resultLineEl = root.querySelector("[data-result-line]");
@@ -205,7 +253,7 @@
   function spawnItem() {
     if (!state || !state.active) return;
 
-    var maxVisible = isMobile() ? 4 : 6;
+    var maxVisible = isMobile() ? 6 : 9;
     if (field.querySelectorAll(".game-item").length >= maxVisible) return;
 
     var picked = pickItem();
@@ -241,6 +289,7 @@
     btn.style.height = size + "px";
     btn.setAttribute("aria-label", "Collect " + picked.label);
     btn.dataset.points = String(picked.points);
+    btn.dataset.rare = picked.isRare ? "1" : "";
     btn.innerHTML = ICONS[picked.id] || "";
 
     if (isFalling) {
@@ -279,11 +328,19 @@
     state.score += points;
     state.found += 1;
     foundEl.textContent = String(state.found);
+    updateGoalDisplay();
+    playPop(btn.dataset.rare === "1");
 
     var rect = btn.getBoundingClientRect();
     showPopup(rect.left + rect.width / 2, rect.top, points);
 
     btn.remove();
+  }
+
+  function updateGoalDisplay() {
+    if (!goalEl || !state) return;
+    var earned = Math.max(0, state.score - state.roundScoreStart);
+    goalEl.textContent = Math.min(earned, state.roundTarget) + "/" + state.roundTarget;
   }
 
   function showPopup(x, y, points) {
@@ -306,8 +363,8 @@
 
   function scheduleSpawn() {
     if (!state || !state.active) return;
-    var min = isMobile() ? 1000 : 800;
-    var max = isMobile() ? 1600 : 1400;
+    var min = isMobile() ? 850 : 650;
+    var max = isMobile() ? 1350 : 1150;
     var delay = min + Math.random() * (max - min);
     state.spawnTimeoutId = window.setTimeout(function () {
       spawnItem();
@@ -315,11 +372,43 @@
     }, delay);
   }
 
-  function tickCountdown() {
+  function tickRound() {
     if (!state || !state.active) return;
-    state.timeLeft -= 1;
-    timeEl.textContent = String(Math.max(0, state.timeLeft));
-    if (state.timeLeft <= 0) endGame();
+    state.roundTimeLeft -= 1;
+    timeEl.textContent = String(Math.max(0, state.roundTimeLeft));
+
+    if (state.roundTimeLeft <= 0) {
+      var earned = state.score - state.roundScoreStart;
+      if (earned >= state.roundTarget) {
+        advanceRound();
+      } else {
+        endGame();
+      }
+    }
+  }
+
+  function advanceRound() {
+    state.roundIndex += 1;
+    state.roundScoreStart = state.score;
+    state.roundTarget = Math.round(state.roundTarget * ROUND_TARGET_GROWTH);
+    state.roundDurationS = Math.max(
+      ROUND_DURATION_FLOOR_S,
+      Math.round(state.roundDurationS - ROUND_DURATION_STEP_S)
+    );
+    state.roundTimeLeft = state.roundDurationS;
+    timeEl.textContent = String(state.roundTimeLeft);
+    updateGoalDisplay();
+    showRoundToast(state.roundIndex + 1);
+  }
+
+  function showRoundToast(roundNumber) {
+    var toast = document.createElement("div");
+    toast.className = "game-round-toast";
+    toast.textContent = "ROUND " + roundNumber;
+    field.appendChild(toast);
+    window.setTimeout(function () {
+      if (toast.isConnected) toast.remove();
+    }, 1000);
   }
 
   function stopTimers() {
@@ -340,7 +429,11 @@
       active: true,
       score: 0,
       found: 0,
-      timeLeft: GAME_DURATION_S,
+      roundIndex: 0,
+      roundTarget: ROUND_TARGET_START,
+      roundDurationS: ROUND_DURATION_S,
+      roundTimeLeft: ROUND_DURATION_S,
+      roundScoreStart: 0,
       itemTimers: new Map(),
       spawnTimeoutId: null,
       countdownIntervalId: null,
@@ -348,8 +441,10 @@
 
     field.innerHTML = "";
     foundEl.textContent = "0";
-    timeEl.textContent = String(GAME_DURATION_S);
+    timeEl.textContent = String(ROUND_DURATION_S);
     resultEl.hidden = true;
+    updateGoalDisplay();
+    ensureAudio();
 
     root.classList.add("is-active");
     root.removeAttribute("aria-hidden");
@@ -358,7 +453,7 @@
     if (shell) shell.classList.add("game-dim");
     document.body.classList.add("game-scroll-lock");
 
-    state.countdownIntervalId = window.setInterval(tickCountdown, 1000);
+    state.countdownIntervalId = window.setInterval(tickRound, 1000);
     scheduleSpawn();
   }
 
@@ -371,17 +466,21 @@
   }
 
   function showResult() {
-    var score = state.score;
+    var rounds = state.roundIndex;
     var message;
-    if (score < 60) message = "You were probably reading instead.";
-    else if (score < 150) message = "Not bad for a short break.";
-    else if (score < 300) message = "You notice everything.";
+    if (rounds === 0) message = "You were probably reading instead.";
+    else if (rounds <= 2) message = "Not bad for a short break.";
+    else if (rounds <= 5) message = "You notice everything.";
     else message = "You definitely stayed too long.";
 
     resultLineEl.textContent =
       "You found " + state.found + (state.found === 1 ? " thing." : " things.");
     resultMsgEl.textContent = message;
-    resultScoreEl.textContent = score + " points";
+    resultScoreEl.textContent =
+      state.score +
+      " points, " +
+      rounds +
+      (rounds === 1 ? " round cleared" : " rounds cleared");
     resultEl.hidden = false;
   }
 
