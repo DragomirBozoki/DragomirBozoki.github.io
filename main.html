@@ -8,12 +8,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="game.css" />
 </head>
 <body>
   <div class="page-shell">
     <header class="site-nav">
       <div class="container nav-inner">
-        <a class="brand" href="main.html">mindloop<span>.</span></a>
+        <div class="nav-brand-group">
+          <a class="brand" href="main.html">mindloop<span>.</span></a>
+          <button type="button" class="game-trigger" data-game-trigger>[ START GAME ]</button>
+        </div>
         <ul class="nav-links">
           <li><a class="active" href="main.html">Home</a></li>
           <li><a href="blog.html">Writing</a></li>
@@ -94,5 +98,6 @@
   </div>
   <script src="posts/posts-data.js"></script>
   <script src="main.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>

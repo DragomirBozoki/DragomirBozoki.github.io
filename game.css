@@ -1,0 +1,305 @@
+/* ─────────────────────────────────────────────────────────
+   Cozy collectible game (main.html only)
+   Isolated stylesheet. Relies entirely on the site's existing
+   custom properties (--bg, --text, --muted, --rule, --soft,
+   --accent, --radius, --font-ui, --font-mono, --font-text) so
+   it automatically matches light/dark mode and never needs its
+   own color palette.
+   ───────────────────────────────────────────────────────── */
+
+/* Entry point, sits next to the wordmark in the nav */
+
+.nav-brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+}
+
+.game-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.game-trigger:hover,
+.game-trigger:focus-visible {
+  color: var(--accent);
+}
+
+/* Subtle desaturation of the page itself while the game is running */
+
+.page-shell.game-dim {
+  filter: grayscale(0.2) brightness(0.97);
+  transition: filter 300ms ease;
+}
+
+body.game-scroll-lock {
+  overflow: hidden;
+}
+
+/* Game root: a single full-viewport layer, invisible and inert
+   until .is-active is toggled by the JS module. */
+
+.game-root {
+  display: none;
+}
+
+.game-root.is-active {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.game-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--soft);
+  opacity: 0.62;
+}
+
+.game-field {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* HUD */
+
+.game-hud {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.game-hud-stats {
+  display: flex;
+  gap: 1.1rem;
+}
+
+.game-hud-stats span[data-found],
+.game-hud-stats span[data-time] {
+  color: var(--text);
+}
+
+.game-exit {
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.game-exit:hover,
+.game-exit:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Collectibles */
+
+.game-item {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  animation: game-pop-in 220ms ease-out both, game-float 3.4s ease-in-out 220ms infinite;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.game-item svg {
+  width: 55%;
+  height: 55%;
+}
+
+.game-item:hover,
+.game-item:focus-visible {
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+
+.game-item--rare {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.game-item--fade {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+@keyframes game-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes game-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Score feedback */
+
+.game-popup {
+  position: fixed;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  animation: game-popup-rise 700ms ease-out forwards;
+}
+
+@keyframes game-popup-rise {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -170%);
+  }
+}
+
+/* Result screen */
+
+.game-result {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.game-result[hidden] {
+  display: none;
+}
+
+.game-result-card {
+  width: min(360px, 100%);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 1.75rem 1.5rem;
+  text-align: center;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.14);
+}
+
+.game-result-title {
+  font-family: var(--font-text);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--text);
+  margin: 0 0 0.6rem;
+}
+
+.game-result-line {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  color: var(--text);
+  margin: 0 0 0.3rem;
+}
+
+.game-result-msg {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+  margin: 0 0 1rem;
+}
+
+.game-result-score {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin: 0 0 1.4rem;
+}
+
+.game-result-actions {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Mobile */
+
+@media (max-width: 700px) {
+  .game-hud {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.65rem;
+  }
+
+  .game-hud-stats {
+    gap: 0.8rem;
+  }
+
+  .game-result-card {
+    padding: 1.4rem 1.15rem;
+  }
+
+  /* The nav is already tight at phone widths. Stack the trigger under
+     the wordmark instead of widening the row, so it never competes
+     with "Home / Writing / About / Contact" for horizontal space. */
+  .site-nav {
+    height: auto;
+  }
+
+  .nav-inner {
+    height: auto;
+    min-height: var(--nav-height);
+    padding: 0.5rem 0;
+  }
+
+  .nav-brand-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+  }
+
+  .game-trigger {
+    font-size: 0.6rem;
+  }
+}
