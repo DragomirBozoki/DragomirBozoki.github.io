@@ -63,6 +63,8 @@
 
   var GAME_DURATION_S = 28;
   var RARE_CHANCE = 0.14;
+  var FALL_CHANCE = 0.22;
+  var COLORS = ["orange", "purple", "blue", "red", "green"];
 
   var root, field, foundEl, timeEl, resultEl, resultLineEl, resultMsgEl, resultScoreEl;
   var state = null;
@@ -92,8 +94,8 @@
       '<p class="game-result-msg" data-result-msg></p>' +
       '<p class="game-result-score" data-result-score></p>' +
       '<div class="game-result-actions">' +
-      '<button type="button" class="button button-primary" data-play-again>PLAY AGAIN</button>' +
-      '<button type="button" class="button" data-return>RETURN TO SITE</button>' +
+      '<button type="button" class="game-btn game-btn-primary" data-play-again>PLAY AGAIN</button>' +
+      '<button type="button" class="game-btn" data-return>RETURN TO SITE</button>' +
       "</div>" +
       "</div>" +
       "</div>";
@@ -145,13 +147,16 @@
     };
   }
 
+  function hudSafeTop() {
+    return isMobile() ? 92 : 74;
+  }
+
   function randomPosition(size) {
     var margin = 16;
-    var hudSafeTop = isMobile() ? 92 : 74;
+    var minY = hudSafeTop();
     var w = window.innerWidth;
     var h = window.innerHeight;
     var minX = margin;
-    var minY = hudSafeTop;
     var maxX = Math.max(minX + 1, w - size - margin);
     var maxY = Math.max(minY + 1, h - size - margin);
 
@@ -186,6 +191,17 @@
     return best;
   }
 
+  // Falling items only need a random X; they start just below the
+  // HUD and travel down, so the usual overlap-avoidance isn't worth
+  // the complexity here.
+  function fallStartPosition(size) {
+    var margin = 16;
+    var w = window.innerWidth;
+    var minX = margin;
+    var maxX = Math.max(minX + 1, w - size - margin);
+    return { x: minX + Math.random() * (maxX - minX), y: hudSafeTop() };
+  }
+
   function spawnItem() {
     if (!state || !state.active) return;
 
@@ -193,27 +209,49 @@
     if (field.querySelectorAll(".game-item").length >= maxVisible) return;
 
     var picked = pickItem();
-    var size = isMobile() ? 46 : 42;
-    var pos = randomPosition(size);
+    var isFalling = Math.random() < FALL_CHANCE;
+    if (isFalling) {
+      picked.points += 20 + Math.floor(Math.random() * 31); // +20..+50
+    }
+
+    var sizeRange = isMobile() ? [40, 56] : [32, 54];
+    var size = Math.round(sizeRange[0] + Math.random() * (sizeRange[1] - sizeRange[0]));
+
+    var pos = isFalling ? fallStartPosition(size) : randomPosition(size);
     if (!pos) return;
-
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "game-item" + (picked.isRare ? " game-item--rare" : "");
-    btn.style.left = pos.x + "px";
-    btn.style.top = pos.y + "px";
-    btn.style.width = size + "px";
-    btn.style.height = size + "px";
-    btn.style.animationDelay = "0s, " + (Math.random() * 1.6).toFixed(2) + "s";
-    btn.setAttribute("aria-label", "Collect " + picked.label);
-    btn.dataset.points = String(picked.points);
-    btn.innerHTML = ICONS[picked.id] || "";
-
-    field.appendChild(btn);
 
     var lifetime = picked.isRare
       ? 4200 + Math.random() * 1500
       : 2500 + Math.random() * 2000;
+    if (isFalling) lifetime = Math.max(lifetime, 2200); // give it room to actually fall
+
+    var colorClass = picked.isRare
+      ? ""
+      : " game-item--c-" + COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className =
+      "game-item" +
+      (picked.isRare ? " game-item--rare" : colorClass) +
+      (isFalling ? " game-item--falling" : "");
+    btn.style.left = pos.x + "px";
+    btn.style.top = pos.y + "px";
+    btn.style.width = size + "px";
+    btn.style.height = size + "px";
+    btn.setAttribute("aria-label", "Collect " + picked.label);
+    btn.dataset.points = String(picked.points);
+    btn.innerHTML = ICONS[picked.id] || "";
+
+    if (isFalling) {
+      var fallDistance = window.innerHeight - pos.y - size + 60;
+      btn.style.setProperty("--fall-distance", fallDistance + "px");
+      btn.style.setProperty("--fall-duration", lifetime + "ms");
+    } else {
+      btn.style.animationDelay = "0s, " + (Math.random() * 1.6).toFixed(2) + "s";
+    }
+
+    field.appendChild(btn);
 
     var timeoutId = window.setTimeout(function () {
       expireItem(btn);
@@ -372,8 +410,9 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    var trigger = document.querySelector("[data-game-trigger]");
-    if (!trigger) return;
-    trigger.addEventListener("click", startGame);
+    var triggers = document.querySelectorAll("[data-game-trigger]");
+    triggers.forEach(function (trigger) {
+      trigger.addEventListener("click", startGame);
+    });
   });
 })();
