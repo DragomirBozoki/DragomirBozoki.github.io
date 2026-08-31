@@ -792,7 +792,7 @@
             <li>LinkCraft-sourced speaking animations across every motion state;</li>
             <li>PICO-based teleoperation, including the recently-enabled arm control on X2;</li>
             <li>Free-form joint control on A2's arms (outside the gesture catalog): works, but isn't wired into anything user-facing;</li>
-            <li>Whatever A2's arm-movement demo below turns out to actually be, the mechanism behind it isn't traced in the codebase yet.</li>
+            <li>A2's hand-programmed cup routine (below): a one-off, joint-by-joint sequence written directly at the motion-control layer, not a repeatable or general capability.</li>
           </ul>
           <div class="post-callout">
             Here, "experimental" means tested on hardware but still moving. We don't treat any of this as a
@@ -813,27 +813,29 @@
             <li>A successful HTTP response from a vendor motion API doesn't mean the robot moved. Wrong work mode, wrong action state, an out-of-bounds trajectory, all three can come back as <code>code: 0</code>. Treat "no motion" as its own failure mode, distinct from an error.</li>
           </ol>
 
-          <h2>A2 and the Cup: What We Can Actually Confirm</h2>
+          <h2>A2 and the Cup: Hand-Programmed, Not Autonomous</h2>
           <p>
-            The A2 has also been recorded doing something that looks like reaching for and handling a cup. It
-            would be easy to caption that as a manipulation demo. It's more honest to say we don't have a traced
-            call path for it. Nothing that looks like grasp planning, object detection for manipulation, or a
-            pick-and-place routine exists anywhere in the platform code we searched.
+            The A2 has also been recorded reaching for and handling a cup, and it's worth being precise about
+            what that actually is, because it looks a lot more capable than it is. It's a routine we wrote
+            ourselves, by hand, at the low-level motion-control layer. The gesture catalog had nothing to do with
+            it. Neither did the LLM, perception, or either of the two arm scripts mentioned above.
           </p>
           <p>
-            What does exist, and is the closest confirmed thing to it, is a pair of scripts,
-            <code>a2_arm_raise.py</code> and <code>a2_arm_stretch.py</code>, that drive the arm through the
-            free-form joint-control path described above (<code>McMotionService/PlanningMove</code>), run in
-            dry-run mode by default and throttled to 12% velocity scale when actually executed. They raise and
-            stretch the arm. They don't grasp anything.
+            Getting it working meant going into the motion controller directly, in the same vendor-approved
+            low-level development mode mentioned earlier for the x86 box, and choreographing the sequence joint by
+            joint rather than calling a preset from the gesture catalog or driving it through
+            <code>McMotionService/PlanningMove</code> the way <code>a2_arm_raise.py</code> and
+            <code>a2_arm_stretch.py</code> do. It's a one-off, purpose-built routine for that specific action, not
+            a general capability sitting behind an API that the LLM, the Supervisor, or anyone else on the team
+            can invoke.
           </p>
           <p>
-            There's a harder constraint underneath all of this, too: as covered above, this platform's joint
-            tables stop at the wrist on both arms. There is no hand or gripper interface exposed anywhere in the
-            code this system talks to. Whatever the video shows, it isn't autonomous grasping running through
-            anything traced here. It's either an opaque vendor preset outside what we've mapped (plausible, since
-            presets are black boxes by design), or something staged. We'd rather say that plainly than dress up a
-            two-script arm routine as a manipulation pipeline.
+            That distinction matters more than the clip itself. It's easy to watch a robot pick up a cup and
+            assume there's a grasp planner or an object detector behind it. There isn't. Nothing here runs
+            perception on the cup, nothing decides where to place the hand, nothing generalizes to a different
+            object or a different position on the desk. It's the same motion every time, because we hand-tuned it
+            to be, joint by joint, on hardware we had direct access to. Object manipulation, in the sense of a
+            robot figuring out how to hold something it hasn't seen before, is not what this is.
           </p>
 
           <figure class="post-media post-video">
@@ -841,7 +843,7 @@
               Your browser does not support the video tag. You can
               <a href="../videos/a2-cup-grasp-demo.mp4">download the clip here</a>.
             </video>
-            <figcaption>AgiBot A2 Ultra handling a cup on camera. The exact mechanism behind this clip isn't traced in the codebase, and the platform exposes no hand or gripper interface at all.</figcaption>
+            <figcaption>AgiBot A2 Ultra running a hand-programmed cup routine, choreographed directly at the motion-control layer rather than through the gesture catalog or any perception pipeline.</figcaption>
           </figure>
 
           <h2>What We Actually Ended Up With</h2>
