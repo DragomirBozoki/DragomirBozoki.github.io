@@ -388,7 +388,12 @@ img {
   grid-row: 1;
   visibility: hidden;
   opacity: 0;
-  transition: opacity 250ms ease;
+  /* Transitioning visibility alongside opacity, instead of leaving
+     it to snap, is what makes this a real two-way crossfade: the
+     browser holds the outgoing panel visible until its fade-out
+     finishes, and flips the incoming one visible at the very start
+     of its fade-in. */
+  transition: opacity 280ms ease, visibility 280ms ease;
   pointer-events: none;
 }
 
