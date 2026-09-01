@@ -372,8 +372,24 @@ img {
   color: var(--text);
 }
 
+/* Both panels are stacked in the same grid cell (instead of one
+   being display:none) so the row's height always matches the
+   tallest panel. That's what stops the container from visibly
+   dropping when Vinaver's much shorter bullet list is shown. The
+   inactive panel is opacity:0 + visibility:hidden, so switching
+   tabs crossfades the incoming panel in rather than snapping. */
+.exp-panels {
+  position: relative;
+  display: grid;
+}
+
 .exp-panel {
-  display: none;
+  grid-column: 1;
+  grid-row: 1;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  pointer-events: none;
 }
 
 .exp-role {
@@ -429,7 +445,9 @@ img {
 
 #exp-tab-comtrade:checked ~ .exp-panels #exp-panel-comtrade,
 #exp-tab-vinaver:checked ~ .exp-panels #exp-panel-vinaver {
-  display: block;
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 @media (max-width: 700px) {
