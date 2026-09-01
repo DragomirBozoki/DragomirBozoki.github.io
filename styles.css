@@ -505,9 +505,16 @@ img {
   border-radius: var(--radius);
   object-fit: cover;
   border: 2px solid var(--accent);
-  filter: grayscale(1) contrast(1.05);
   background: #fff;
   flex-shrink: 0;
+}
+
+/* Only for logos that are actually in color (Sorbonne's navy mark).
+   FTN and Peloponnese are already plain black ink on white, and
+   running a CSS filter over them softened their fine linework into
+   a pixelated mush at this size, so they're left untouched. */
+.edu-logo--color {
+  filter: grayscale(1);
 }
 
 .edu-text {
