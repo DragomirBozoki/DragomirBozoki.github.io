@@ -499,11 +499,17 @@ img {
   gap: 1.15rem;
 }
 
+/* object-fit: contain (not cover) + padding, so each logo shows in
+   full at a smaller size with a clean white margin around it,
+   instead of being cropped edge-to-edge at 52px, which is what was
+   making the fine linework look pixelated. */
 .edu-logo {
   width: 52px;
   height: 52px;
+  padding: 7px;
+  box-sizing: border-box;
   border-radius: var(--radius);
-  object-fit: cover;
+  object-fit: contain;
   background: #fff;
   flex-shrink: 0;
 }
@@ -511,15 +517,6 @@ img {
 /* Only for logos that are actually in color (Sorbonne's navy mark). */
 .edu-logo--color {
   filter: grayscale(1);
-}
-
-/* FTN is black ink on a transparent background. filter applies to
-   the element's background too, so the fix is to keep the ordinary
-   white background (inherited from .edu-logo) and let invert() flip
-   it dark, rather than setting a dark background here and having
-   the same filter invert it right back to light. */
-.edu-logo--dark {
-  filter: invert(0.92);
 }
 
 .edu-text {
@@ -561,7 +558,7 @@ img {
 .edu-logo-sm {
   width: 32px;
   height: 32px;
-  border-width: 1.5px;
+  padding: 4px;
 }
 
 .edu-sub-text {
