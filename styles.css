@@ -220,6 +220,7 @@ img {
 }
 
 #experience .eyebrow,
+#education .eyebrow,
 #featured .eyebrow {
   color: var(--accent);
   font-weight: 600;
@@ -481,6 +482,103 @@ img {
   #exp-tab-vinaver:checked ~ .exp-tab-list label[for="exp-tab-vinaver"] {
     border-left-color: transparent;
     border-bottom-color: var(--accent);
+  }
+}
+
+/* ───────── Education ───────── */
+
+.edu-list {
+  margin-top: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.edu-item {
+  display: flex;
+  gap: 1.15rem;
+}
+
+.edu-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent);
+  filter: grayscale(1) contrast(1.05);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.edu-text {
+  min-width: 0;
+}
+
+.edu-degree {
+  font-family: var(--font-text);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.edu-school {
+  margin-top: 0.35rem;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.edu-dates {
+  margin-top: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.edu-sub {
+  margin-top: 1.1rem;
+  margin-left: 1.5rem;
+  padding-left: 1.1rem;
+  border-left: 2px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.edu-logo-sm {
+  width: 38px;
+  height: 38px;
+  border-width: 1.5px;
+}
+
+.edu-sub-text {
+  font-family: var(--font-ui);
+  font-size: 0.87rem;
+  color: var(--text);
+}
+
+.edu-sub-when {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .edu-logo {
+    width: 52px;
+    height: 52px;
+  }
+
+  .edu-sub {
+    margin-left: 0.7rem;
+    padding-left: 0.8rem;
+    align-items: flex-start;
+  }
+
+  .edu-logo-sm {
+    width: 34px;
+    height: 34px;
   }
 }
 
