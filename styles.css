@@ -219,7 +219,6 @@ img {
   letter-spacing: 0.02em;
 }
 
-#about .eyebrow,
 #experience .eyebrow,
 #featured .eyebrow {
   color: var(--accent);
@@ -333,123 +332,132 @@ img {
   line-height: 1.6;
 }
 
-/* ───────── Experience ───────── */
+/* ───────── Experience (tabbed, no JS: radio + label + sibling combinator) ───────── */
 
-.experience-list {
-  margin-top: 1.5rem;
+.exp-tabs {
+  position: relative;
+  margin-top: 1.75rem;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 2.5rem;
+}
+
+.exp-tab-input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.exp-tab-list {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  border-left: 1px solid var(--rule);
+  align-self: start;
 }
 
-.experience-item {
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--soft);
-}
-
-.experience-item + .experience-item {
-  margin-top: 0;
-}
-
-.experience-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 1.25rem;
+.exp-tab-label {
+  padding: 0.6rem 0 0.6rem 1.1rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  color: var(--muted);
   cursor: pointer;
-  list-style: none;
+  transition: color 150ms ease, border-color 150ms ease;
 }
 
-.experience-summary::-webkit-details-marker {
+.exp-tab-label:hover {
+  color: var(--text);
+}
+
+.exp-panel {
   display: none;
 }
 
-.experience-summary::after {
-  content: "+";
-  flex-shrink: 0;
-  width: 1.4em;
-  text-align: center;
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  color: var(--muted);
-  transition: color 150ms ease;
+.exp-role {
+  font-family: var(--font-text);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--text);
 }
 
-.experience-item[open] .experience-summary::after {
-  content: "\2212";
-}
-
-.experience-summary:hover::after {
+.exp-company-name {
   color: var(--accent);
 }
 
-.experience-summary-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.experience-role {
-  font-family: var(--font-text);
-  font-weight: 700;
-  font-size: 1.05rem;
-  color: var(--text);
-}
-
-.experience-company {
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
-.experience-dates {
+.exp-dates {
+  margin-top: 0.4rem;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
   color: var(--muted);
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.experience-bullets {
+.exp-bullets {
   list-style: none;
-  margin: 0;
-  padding: 0 1.25rem 1.25rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.85rem;
 }
 
-.experience-bullets li {
+.exp-bullets li {
   position: relative;
-  padding-left: 1.1rem;
+  padding-left: 1.4rem;
   font-family: var(--font-text);
-  font-size: 0.95rem;
-  line-height: 1.55;
+  font-size: 0.97rem;
+  line-height: 1.6;
   color: var(--text);
 }
 
-.experience-bullets li::before {
-  content: "";
+.exp-bullets li::before {
+  content: "\25B8";
   position: absolute;
   left: 0;
-  top: 0.6em;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
+  top: 0;
+  color: var(--accent);
+}
+
+#exp-tab-comtrade:checked ~ .exp-tab-list label[for="exp-tab-comtrade"],
+#exp-tab-vinaver:checked ~ .exp-tab-list label[for="exp-tab-vinaver"] {
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
+
+#exp-tab-comtrade:checked ~ .exp-panels #exp-panel-comtrade,
+#exp-tab-vinaver:checked ~ .exp-panels #exp-panel-vinaver {
+  display: block;
 }
 
 @media (max-width: 700px) {
-  .experience-summary {
-    flex-wrap: wrap;
+  .exp-tabs {
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
   }
 
-  .experience-dates {
-    order: 3;
-    flex-basis: 100%;
+  .exp-tab-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-left: 0;
+    border-bottom: 1px solid var(--rule);
+    gap: 0.4rem 1.25rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .exp-tab-label {
+    padding: 0.2rem 0;
+    margin-left: 0;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+  }
+
+  #exp-tab-comtrade:checked ~ .exp-tab-list label[for="exp-tab-comtrade"],
+  #exp-tab-vinaver:checked ~ .exp-tab-list label[for="exp-tab-vinaver"] {
+    border-left-color: transparent;
+    border-bottom-color: var(--accent);
   }
 }
 
