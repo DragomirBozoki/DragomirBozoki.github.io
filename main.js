@@ -70,7 +70,7 @@ async function loadPostFromFile(href) {
 
   const title =
     doc.querySelector(".post-title")?.textContent?.trim() ||
-    doc.title.replace(" - mindloop", "").trim();
+    doc.title.replace(" - Dragomir Božoki", "").trim();
 
   const excerpt =
     doc.querySelector(".post-subtitle")?.textContent?.trim() ||

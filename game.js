@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────
-   Cozy collectible game (main.html only)
+   Cozy collectible game (index.html only)
 
    Self-contained module. Builds one persistent DOM layer on
    first start and toggles it on/off; never rebuilds it, so

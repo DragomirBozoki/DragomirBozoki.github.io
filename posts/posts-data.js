@@ -3,11 +3,11 @@ window.POSTS = [
     title: "Building a Multimodal AI Platform for Humanoid Robots",
     excerpt:
       "What began as a voice agent for one robot turned into a shared platform for voice, vision, identity, gesture, and teleoperation, running across the AgiBot X2 Ultra and A2 Ultra.",
-    href: "posts/agibot-x2-a2-conversational-ai-humanoid-robots.html",
+    href: "/posts/agibot-x2-a2-conversational-ai-humanoid-robots/",
     dateLabel: "August 2026",
     publishedAt: "2026-08-26",
     tags: ["Robotics", "Multimodal AI", "LiveKit", "Computer Vision"],
-    heroImage: "images/robots/x2-hero-square.jpg",
+    heroImage: "/images/robots/x2-hero-square.jpg",
     archiveTitle: "Building a Multimodal AI Platform for Humanoid Robots",
     archiveExcerpt:
       "A build log for the voice, vision, identity, gesture, and teleoperation stack running on two different humanoid robots: what works, what's still experimental, and where the hardware fought back.",
@@ -16,7 +16,7 @@ window.POSTS = [
     title: "Predicting ARKit-52 Blendshapes from Audio",
     excerpt:
       "How an ensemble, a learned face refiner, and a deterministic blink module took us to second place at the AI-SPEAK 2026 competition.",
-    href: "posts/ai-speak-blendshape-prediction.html",
+    href: "/posts/ai-speak-blendshape-prediction/",
     dateLabel: "May 8, 2026",
     publishedAt: "2026-05-08",
     tags: ["Audio", "Deep Learning", "PyTorch", "Animation"],
@@ -28,7 +28,7 @@ window.POSTS = [
     title: "Qdrant in Production",
     excerpt:
       "When a dedicated vector database beats general search services, and how to run it without surprises.",
-    href: "posts/qdrant-in-production.html",
+    href: "/posts/qdrant-in-production/",
     dateLabel: "April 2026",
     publishedAt: "2026-04-01",
     tags: ["Qdrant", "Vector DB", "RAG"],
@@ -40,7 +40,7 @@ window.POSTS = [
     title: "Quantization Theory - Why is quantization so Important?",
     excerpt:
       "From first-principles math to LLM.int8(), GPTQ, and AWQ, and what really changes at FP16, INT8, and INT4.",
-    href: "posts/quantization-theory-why-is-quantization-so-important.html",
+    href: "/posts/quantization-theory-why-is-quantization-so-important/",
     dateLabel: "March 20, 2026",
     publishedAt: "2026-03-20",
     tags: ["Quantization", "LLMs", "Inference"],
@@ -52,7 +52,7 @@ window.POSTS = [
     title: "RAG Retrieval Architecture",
     excerpt:
       "Hybrid retrieval, chunk strategy, and query understanding techniques that actually move answer quality.",
-    href: "posts/rag-retrieval-architecture.html",
+    href: "/posts/rag-retrieval-architecture/",
     dateLabel: "March 2026",
     publishedAt: "2026-03-01",
     tags: ["Retrieval", "NLP", "Python"],
@@ -64,7 +64,7 @@ window.POSTS = [
     title: "Books That Can make you a Better AI Engineer",
     excerpt:
       "Five practical books that build software engineering depth for real AI systems, from Python fundamentals to clean architecture.",
-    href: "posts/books-that-can-make-you-a-better-ai-engineer.html",
+    href: "/posts/books-that-can-make-you-a-better-ai-engineer/",
     dateLabel: "February 17, 2026",
     publishedAt: "2026-02-17",
     tags: ["Books", "AI Engineering", "Learning"],
