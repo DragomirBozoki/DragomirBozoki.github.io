@@ -514,8 +514,13 @@ img {
   flex-shrink: 0;
 }
 
-/* Only for logos that are actually in color (Sorbonne's navy mark). */
+/* Only for logos that are actually in color (Sorbonne's navy mark).
+   Sorbonne's source image has no wasted whitespace around the mark
+   the way FTN/Peloponnese do, so it goes back to filling the full
+   square edge-to-edge instead of the padded/contained treatment. */
 .edu-logo--color {
+  padding: 0;
+  object-fit: cover;
   filter: grayscale(1);
 }
 
