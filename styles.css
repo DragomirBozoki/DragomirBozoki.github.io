@@ -504,17 +504,22 @@ img {
   height: 52px;
   border-radius: var(--radius);
   object-fit: cover;
-  border: 2px solid var(--accent);
   background: #fff;
   flex-shrink: 0;
 }
 
-/* Only for logos that are actually in color (Sorbonne's navy mark).
-   FTN and Peloponnese are already plain black ink on white, and
-   running a CSS filter over them softened their fine linework into
-   a pixelated mush at this size, so they're left untouched. */
+/* Only for logos that are actually in color (Sorbonne's navy mark). */
 .edu-logo--color {
   filter: grayscale(1);
+}
+
+/* FTN is black ink on a transparent background. filter applies to
+   the element's background too, so the fix is to keep the ordinary
+   white background (inherited from .edu-logo) and let invert() flip
+   it dark, rather than setting a dark background here and having
+   the same filter invert it right back to light. */
+.edu-logo--dark {
+  filter: invert(0.92);
 }
 
 .edu-text {
