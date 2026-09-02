@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generating Chest X-rays with GANs - Dragomir Bo&#382;oki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="/">Dragomir Bo&#382;oki</a>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a class="active" href="/blog/">Writing</a></li>
+          <li><a href="/#experience">Experience</a></li>
+          <li><a href="/#education">Education</a></li>
+          <li><a href="/#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="/blog/">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>July 2026</span>
+          <span class="meta-dot">.</span>
+          <span>14 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">GAN</a>
+          <a href="#">Medical Imaging</a>
+          <a href="#">TensorFlow</a>
+        </div>
+
+        <h1 class="post-title">Generating Chest X-rays with Generative Adversarial Networks</h1>
+        <p class="post-subtitle">Training a GAN to learn the visual structure of medical radiographs.</p>
+
+        <div class="post-body">
+          <p>
+            Generative models are often demonstrated on faces, landscapes, or small image datasets. I wanted to
+            work on a problem where mistakes are easier to notice and where image structure actually matters.
+          </p>
+          <p>
+            Chest X-rays were a good fit.
+          </p>
+          <p>
+            Unlike many natural images, radiographs have a relatively consistent global composition: the thoracic
+            cavity occupies a predictable region, the lungs are approximately symmetric, the spine creates a strong
+            central structure, and ribs, clavicles, and surrounding tissue form repeating anatomical patterns.
+          </p>
+          <p>
+            At the same time, generating a convincing X-ray is far from trivial. A model can quickly learn that an
+            X-ray is a mostly dark grayscale image with a bright region in the middle. Learning the actual
+            anatomical relationships is considerably harder.
+          </p>
+          <p>
+            This project became an experiment in whether a convolutional GAN could progressively learn those
+            structures directly from a dataset of real chest radiographs.
+          </p>
+          <p>
+            The implementation was built in Python using TensorFlow and Keras, with a custom generator,
+            discriminator, and training loop rather than relying on a pre-built GAN framework.
+          </p>
+
+          <h2>The objective</h2>
+          <p>
+            The basic task was straightforward: given a random latent vector, generate a new chest X-ray that
+            follows the visual distribution of real radiographs.
+          </p>
+          <p>
+            The model does not copy an existing patient image and it is not given a specific X-ray as input.
+            Instead, the generator starts from a 256-dimensional random vector sampled from a normal distribution.
+            That vector is gradually transformed into a grayscale image.
+          </p>
+          <p>
+            The discriminator receives either a real radiograph or a generated one and attempts to determine which
+            one it is seeing. Training therefore becomes a competition. The discriminator continuously improves at
+            detecting synthetic images, while the generator continuously adapts to produce images that are more
+            difficult to distinguish from the real dataset.
+          </p>
+
+<pre><code>random noise -> generator -> synthetic X-ray -> discriminator -> real / fake</code></pre>
+
+          <p>
+            This adversarial feedback is the only supervision the generator receives.
+          </p>
+
+          <h2>Dataset and preprocessing</h2>
+          <p>
+            I used chest radiographs derived from the NIH Chest X-ray dataset as the basis of the experiment.
+            Before training, the images had to be converted into a consistent representation suitable for the
+            neural network.
+          </p>
+          <p>
+            The preprocessing pipeline included resizing, grayscale handling, and normalization. I experimented
+            with different resolutions during development, while the final model architecture operates on
+            <strong>512 &times; 512 grayscale images</strong>.
+          </p>
+          <p>
+            Using a relatively high output resolution made the task substantially harder than the typical
+            64 &times; 64 or 128 &times; 128 GAN examples. A 512 &times; 512 grayscale image already contains more
+            than 260,000 output pixels. More importantly, those pixels cannot be generated independently. The model
+            has to preserve meaningful spatial relationships across the complete image.
+          </p>
+          <p>
+            I also implemented conservative augmentation. For medical images I deliberately avoided aggressive
+            spatial transformations. Random rotations, crops, or geometric distortions can introduce anatomically
+            questionable images and can change relationships that the network should actually learn.
+          </p>
+          <p>Instead, augmentation is limited primarily to small changes in:</p>
+          <ul>
+            <li>brightness</li>
+            <li>contrast</li>
+          </ul>
+          <p>
+            The changes are intentionally small, around &plusmn;8%, with the goal of increasing appearance
+            variability without modifying anatomical geometry.
+          </p>
+          <div class="post-callout">
+            Augmentation should improve robustness without generating unrealistic medical samples. That principle
+            shaped every preprocessing decision in this project.
+          </div>
+
+          <h2>Designing the generator</h2>
+          <p>
+            The generator is responsible for the most difficult part of the system. It receives a latent vector,
+            z &isin; &#8477;<sup>256</sup>, and has to convert it into an entire radiograph.
+          </p>
+          <p>
+            I start by projecting the 256-dimensional latent representation using a dense layer into a
+            <strong>4 &times; 4 &times; 1024</strong> feature tensor. From there, the image is progressively
+            expanded:
+          </p>
+
+<pre><code>4x4 -> 8x8 -> 16x16 -> 32x32 -> 64x64 -> 128x128 -> 256x256 -> 512x512</code></pre>
+
+          <p>
+            Each stage increases the spatial resolution while convolutional layers learn increasingly detailed
+            representations.
+          </p>
+          <p>
+            The early layers are responsible for very coarse structure. At this point the network is effectively
+            deciding where the large bright and dark regions of the image should exist. Later layers begin
+            modelling finer details such as:
+          </p>
+          <ul>
+            <li>the outline of the lung fields</li>
+            <li>the central mediastinal region</li>
+            <li>shoulder and clavicle structure</li>
+            <li>rib-like textures</li>
+            <li>intensity transitions between tissue regions</li>
+          </ul>
+          <p>
+            I used relatively wide convolution kernels in the early generator layers and gradually reduced the
+            kernel size toward the output. This gives the early stages a larger receptive field for learning global
+            structure while allowing later layers to focus more on local image detail.
+          </p>
+          <p>
+            Batch normalization is used throughout the generator to stabilize the intermediate feature
+            distributions. LeakyReLU activations are used instead of standard ReLU in the majority of the
+            architecture, while the final layer uses a <code>tanh</code> activation. This maps the generated output
+            to the same normalized range used for the training images.
+          </p>
+          <p>
+            Another part of the architecture that I experimented with was light dropout inside the generator.
+            Rather than treating the generator as a deterministic image decoder during training, a small amount of
+            stochastic regularization helps prevent individual feature channels from becoming overly dominant.
+          </p>
+
+          <h2>The discriminator</h2>
+          <p>
+            The discriminator performs the opposite transformation. Instead of expanding a compact representation
+            into an image, it progressively compresses a <strong>512 &times; 512 radiograph</strong> into a single
+            probability. The convolutional stack uses increasing channel counts:
+          </p>
+
+<pre><code>32 -> 64 -> 128 -> 256 -> 512</code></pre>
+
+          <p>
+            while stride-2 convolutions gradually reduce the spatial resolution. After the convolutional feature
+            extractor, the representation is flattened and passed through an additional dense layer before
+            producing the final sigmoid output. The result is one number, <code>D(x) &isin; [0,1]</code>, where a
+            value close to 1 indicates that the discriminator believes the image came from the real dataset.
+          </p>
+          <p>
+            Dropout is used relatively aggressively in the discriminator. This was useful because one common
+            failure mode during GAN training is that the discriminator learns faster than the generator and
+            becomes nearly perfect. When that happens, the generator receives very little useful gradient
+            information. A slightly regularized discriminator therefore turned out to be preferable to an
+            unrestricted classifier that immediately dominates the adversarial game.
+          </p>
+
+          <h2>Writing the training loop</h2>
+          <p>
+            One of the more useful parts of this project was implementing the GAN training logic myself. Instead
+            of simply calling <code>model.fit()</code> on a conventional supervised model, I implemented a custom
+            <code>train_step</code> using TensorFlow's <code>GradientTape</code>.
+          </p>
+          <p>
+            Every training iteration contains two separate optimization problems.
+          </p>
+          <p>
+            First, the discriminator is updated. A batch of real chest X-rays is taken from the dataset and a
+            batch of random latent vectors is sampled. The generator converts those vectors into synthetic X-rays.
+            The discriminator then evaluates both sets, <code>D(real images)</code> and
+            <code>D(generated images)</code>. Binary cross-entropy is used for the discriminator loss.
+          </p>
+          <p>
+            After the discriminator update, a new latent batch is sampled and the generator is trained. This time
+            the generator's objective is effectively to produce images for which the discriminator predicts
+            "real." The discriminator weights are not updated during this part of the step. Its predictions simply
+            provide the learning signal that propagates back through the generator.
+          </p>
+          <p>
+            Separating these two optimization steps made it much easier to experiment with the balance between the
+            networks.
+          </p>
+
+          <h2>Stabilizing GAN training</h2>
+          <p>
+            The architecture itself was only part of the problem. Most of the work in GAN experiments happens
+            after the model technically runs. A GAN can train without crashing while still producing useless
+            images.
+          </p>
+          <p>Some of the problems I encountered are typical for adversarial training:</p>
+          <ul>
+            <li>the discriminator becoming too strong</li>
+            <li>the generator collapsing toward similar samples</li>
+            <li>unstable oscillation between generator and discriminator losses</li>
+            <li>images improving for a period and later degrading</li>
+            <li>globally X-ray-like outputs with anatomically poor detail</li>
+          </ul>
+          <p>I introduced several mechanisms to make the training process less brittle.</p>
+
+          <h3>Label smoothing</h3>
+          <p>
+            The discriminator is not trained with perfectly hard labels. Instead of forcing every real image
+            toward exactly 1 and every synthetic image toward exactly 0, I slightly smooth the labels. This
+            reduces discriminator overconfidence and produces a more useful learning signal for the generator.
+          </p>
+
+          <h3>Random label flipping</h3>
+          <p>
+            A small percentage of labels are deliberately flipped during discriminator training. This introduces
+            noise into what would otherwise become an extremely deterministic classification problem. The
+            probability is intentionally low, around 5%, so the discriminator still learns the correct task
+            without becoming excessively confident.
+          </p>
+
+          <h3>Dropout</h3>
+          <p>
+            Dropout is applied to multiple discriminator layers and lightly inside the generator. In practice this
+            provided additional regularization and helped prevent one network from becoming overly specialized
+            against the current state of the other.
+          </p>
+
+          <h3>Separate generator and discriminator updates</h3>
+          <p>
+            The training code explicitly computes gradients for each model independently. That allowed me to
+            modify learning rates and optimizer behaviour separately when continuing the training later.
+          </p>
+
+          <h2>Monitoring the model through generated images</h2>
+          <p>
+            GAN losses are useful, but they are not sufficient. A lower generator loss does not necessarily mean
+            that the generated X-rays look better. For this type of model, visual progression is one of the most
+            informative debugging tools.
+          </p>
+          <p>
+            I therefore implemented a training callback that periodically samples new latent vectors and saves
+            generated radiographs. Early during training I saved images frequently so that changes were easy to
+            inspect. Later, once changes between individual epochs became smaller, the sampling interval was
+            increased. Model checkpoints were also saved periodically so that useful training states were not lost
+            if later adversarial training became unstable.
+          </p>
+          <p>
+            This turned training into something closer to an experiment log. Instead of only asking what the
+            losses were at epoch 2000, I could inspect what the model actually believed an X-ray looked like at
+            epochs 500, 1000, 2000, and 3000. The visual evolution was much more informative.
+          </p>
+
+          <h2>What the model learns first</h2>
+          <p>
+            One of the most interesting parts of the project was observing the order in which image structure
+            appeared. At the beginning, generated samples were essentially structured noise. The model first
+            started discovering the broad intensity distribution of radiographs: images became dark around the
+            edges with brighter structures concentrated around the thorax.
+          </p>
+
+          <figure class="post-media">
+            <img src="/images/GAN/500.png" alt="Generated chest X-ray sample at training epoch 500" loading="lazy" />
+            <figcaption>Epoch 500: the model has picked up the broad intensity distribution of a radiograph, but anatomical structure is still weak and inconsistent.</figcaption>
+          </figure>
+
+          <p>
+            After that, recognizable global anatomy began to emerge. The network learned that chest X-rays tend to
+            contain two large lung regions separated by a central structure. Only later did finer patterns begin
+            appearing inside those regions.
+          </p>
+
+          <figure class="post-media">
+            <img src="/images/GAN/3000.png" alt="Generated chest X-ray sample at training epoch 3000" loading="lazy" />
+            <figcaption>Epoch 3000: the same latent space now produces organized thoracic structure, with clearer lung fields and a more stable central anatomy.</figcaption>
+          </figure>
+
+          <p>
+            This illustrates an important property of convolutional generative networks. The generator does not
+            learn "lungs," "ribs," or "spine" as explicitly labelled objects. None of those structures are
+            annotated for the GAN. They emerge because reproducing them helps the generator match the distribution
+            that the discriminator sees in real radiographs.
+          </p>
+
+          <h2>Continuing training from later checkpoints</h2>
+          <p>
+            The initial training pipeline was deliberately simple. Both networks used Adam optimizers with the
+            same learning rate and were trained through the custom adversarial loop.
+          </p>
+          <p>
+            Once the generator had already learned the basic X-ray distribution, I created a separate fine-tuning
+            stage rather than simply continuing with the exact same configuration. The fine-tuning pipeline loads
+            the generator and discriminator checkpoints from around epoch 3000 and resumes training with a
+            different optimization strategy.
+          </p>
+          <p>
+            At that point, the problem is no longer simply learning what an X-ray looks like. The network already
+            knows that. The objective becomes improving details without destroying the global structure that has
+            already been learned.
+          </p>
+          <p>
+            For that reason, I reduced the generator learning rate relative to the discriminator. The fine-tuning
+            configuration uses approximately:
+          </p>
+
+<pre><code>Generator LR     = 5e-5
+Discriminator LR = 1e-4</code></pre>
+
+          <p>
+            The idea was to make generator updates more conservative during this stage.
+          </p>
+
+          <h2>Exponential Moving Average</h2>
+          <p>
+            Another improvement introduced during fine-tuning was an <strong>Exponential Moving Average (EMA)</strong>
+            version of the generator. Instead of using only the generator weights from the current optimization
+            step, EMA maintains a second set of weights:
+          </p>
+
+<pre><code>theta_EMA &lt;- alpha * theta_EMA + (1 - alpha) * theta
+alpha ~= 0.999</code></pre>
+
+          <p>
+            The EMA generator therefore represents a slowly changing average of many previous generator states.
+            GAN optimization can oscillate significantly, so the parameters from one particular epoch are not
+            necessarily the best parameters for inference. Averaging them over time often produces visually more
+            stable outputs.
+          </p>
+          <p>
+            During fine-tuning, generated monitoring images are therefore sampled using the EMA generator when
+            available. I also save the EMA model independently from the normal generator and discriminator
+            checkpoints. This made it possible to compare the current generator, the moving-average generator, and
+            earlier checkpoints, rather than assuming that the final epoch must automatically contain the best
+            model.
+          </p>
+
+          <h2>Mixed precision and GPU training</h2>
+          <p>
+            The later training pipeline also enables TensorFlow mixed precision. Generating 512 &times; 512 images
+            through several convolutional stages is significantly more expensive than working with the smaller
+            image sizes commonly used in introductory GAN examples. Mixed precision allows supported GPU
+            operations to use lower-precision floating-point formats where appropriate, reducing memory pressure
+            and improving throughput.
+          </p>
+          <p>
+            I also configured TensorFlow GPU memory growth so that the runtime does not immediately reserve all
+            available GPU memory. These changes did not alter the conceptual model, but they became increasingly
+            important as the image resolution and training duration increased.
+          </p>
+
+          <h2>Results</h2>
+          <p>
+            The most obvious improvement can be seen by comparing early and later generated samples. Around the
+            earlier training stages, the model captures the basic grayscale appearance of radiographs but the
+            anatomy is weak and inconsistent. After extended training, the images show significantly more
+            organized thoracic structure. The lung regions become clearer, the central anatomy becomes more
+            stable, and the overall intensity distribution is much closer to the source dataset.
+          </p>
+          <p>
+            The model is still an experimental generative system rather than a clinically validated medical
+            imaging model. That distinction is important. A synthetic image can look convincing while still
+            containing anatomically incorrect or medically impossible details. For that reason, the generated
+            images should be interpreted as a study of generative modelling and synthetic data generation, not as
+            diagnostic radiographs.
+          </p>
+
+          <h2>Evaluating a medical GAN</h2>
+          <p>
+            Evaluating generative models is significantly less straightforward than evaluating a classifier. There
+            is no simple equivalent of classification accuracy. I used visual comparison as the primary tool
+            during development and also explored quantitative comparisons between real and generated image
+            distributions, including pixel-intensity histograms and image-distance measurements.
+          </p>
+          <p>
+            Such measurements are useful for identifying obvious distribution differences, but they are not
+            sufficient to determine whether generated anatomy is realistic. A stronger evaluation pipeline would
+            include metrics such as FID and SSIM, ideally combined with feature representations that are
+            meaningful specifically for radiology rather than generic natural images.
+          </p>
+          <p>
+            For a serious medical synthetic-data system, I would also want downstream validation. For example:
+          </p>
+          <ol>
+            <li>train a diagnostic classifier using only real images;</li>
+            <li>train the same classifier using real images plus generated samples;</li>
+            <li>evaluate both on a completely untouched real test set.</li>
+          </ol>
+          <p>
+            If synthetic samples genuinely improve generalization, that provides stronger evidence that the
+            generator has learned useful structure rather than simply producing images that look plausible.
+          </p>
+
+          <h2>What I would change today</h2>
+          <p>
+            If I continued the project, I would probably move away from a completely unconditional GAN. The
+            existing generator learns a single distribution, <code>P(X-ray)</code>, but many interesting medical
+            applications require something closer to <code>P(X-ray | condition)</code>.
+          </p>
+          <p>
+            A conditional GAN could use disease labels to control generation. For example, the model could be
+            conditioned on:
+          </p>
+          <ul>
+            <li>normal</li>
+            <li>pneumonia</li>
+            <li>cardiomegaly</li>
+            <li>pleural effusion</li>
+            <li>other radiological findings</li>
+          </ul>
+          <p>
+            This would make the generated data significantly more useful for controlled augmentation experiments.
+            I would also explore architectures designed specifically for more stable high-resolution generation,
+            alongside diffusion-based models.
+          </p>
+          <p>
+            The project was built around GANs intentionally, because understanding the adversarial training
+            process was one of the goals. Today, however, I would compare the results against a diffusion baseline
+            rather than assuming a GAN is automatically the best generative architecture for the problem.
+          </p>
+
+          <h2>What I learned from the project</h2>
+          <p>
+            The most important lesson was that building a GAN architecture is relatively easy. Making two networks
+            learn at compatible speeds is the difficult part. A generator and discriminator can both be technically
+            correct while the complete system fails. Small changes in regularization, learning rates, checkpoint
+            selection, and training strategy can have a disproportionate effect on the results.
+          </p>
+          <p>
+            I also learned how different medical image generation is from ordinary computer vision augmentation.
+            With natural photographs, fairly aggressive geometric transformations are often acceptable. With
+            medical data, altering geometry can change the meaning of the image. That forced me to think more
+            carefully about preprocessing and augmentation instead of applying standard image pipelines
+            automatically.
+          </p>
+          <p>
+            Finally, training at 512 &times; 512 made the hierarchical nature of image generation very visible.
+            The network learns broad structure long before fine structure. Watching that progression across
+            thousands of training epochs was probably the most useful part of the entire experiment.
+          </p>
+
+          <h2>Technical overview</h2>
+          <div class="table-scroll">
+            <table>
+              <tbody>
+                <tr><td>Domain</td><td>Generative AI / Medical Imaging</td></tr>
+                <tr><td>Architecture</td><td>Deep Convolutional Generative Adversarial Network</td></tr>
+                <tr><td>Framework</td><td>TensorFlow / Keras</td></tr>
+                <tr><td>Image format</td><td>512 &times; 512 grayscale radiographs</td></tr>
+                <tr><td>Latent space</td><td>256 dimensions</td></tr>
+                <tr><td>Loss</td><td>Binary cross-entropy</td></tr>
+                <tr><td>Optimization</td><td>Adam</td></tr>
+                <tr><td>Training</td><td>Custom GradientTape adversarial loop</td></tr>
+                <tr><td>Regularization</td><td>Dropout, label smoothing, random label flipping</td></tr>
+                <tr><td>Fine-tuning</td><td>Separate generator / discriminator learning rates</td></tr>
+                <tr><td>Training optimization</td><td>GPU memory growth and mixed precision</td></tr>
+                <tr><td>Inference stabilization</td><td>Exponential Moving Average generator</td></tr>
+                <tr><td>Monitoring</td><td>Periodically generated samples and model checkpoints</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Repository</h2>
+          <p>
+            The full implementation, including preprocessing, augmentation, generator and discriminator
+            architectures, training loop, checkpointing, and fine-tuning code, is available on GitHub:
+            <a href="https://github.com/DragomirBozoki/xray-gan" target="_blank" rel="noreferrer">DragomirBozoki/xray-gan</a>.
+          </p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="/posts/agibot-x2-a2-conversational-ai-humanoid-robots/">Previous: Building a Multimodal AI Platform for Humanoid Robots</a>
+          <a class="button button-primary" href="/posts/ai-speak-blendshape-prediction/">Next: Predicting ARKit-52 Blendshapes from Audio</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

@@ -13,6 +13,18 @@ window.POSTS = [
       "A build log for the voice, vision, identity, gesture, and teleoperation stack running on two different humanoid robots: what works, what's still experimental, and where the hardware fought back.",
   },
   {
+    title: "Generating Chest X-rays with Generative Adversarial Networks",
+    excerpt:
+      "Training a convolutional GAN to learn the visual structure of medical radiographs, from a 256-dimensional latent vector to 512x512 chest X-rays.",
+    href: "/posts/generating-chest-xrays-with-gans/",
+    dateLabel: "July 2026",
+    publishedAt: "2026-07-15",
+    tags: ["GAN", "Medical Imaging", "TensorFlow"],
+    archiveTitle: "Generating Chest X-rays with Generative Adversarial Networks",
+    archiveExcerpt:
+      "A custom generator, discriminator, and adversarial training loop learning the anatomy of chest radiographs, with EMA fine-tuning at 512x512 resolution.",
+  },
+  {
     title: "Predicting ARKit-52 Blendshapes from Audio",
     excerpt:
       "How an ensemble, a learned face refiner, and a deterministic blink module took us to second place at the AI-SPEAK 2026 competition.",
