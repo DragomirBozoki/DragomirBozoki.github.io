@@ -79,6 +79,15 @@ img {
   margin: 0 auto;
 }
 
+/* Above 1200px the fixed game-trigger box occupies the left margin;
+   widen the container so it sits close to the button instead of
+   leaving a large empty gap on wide screens. */
+@media (min-width: 1200px) {
+  .container {
+    width: min(1480px, calc(100% - 500px));
+  }
+}
+
 /* ───────── Navigation ───────── */
 
 .site-nav {
