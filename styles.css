@@ -80,11 +80,11 @@ img {
 }
 
 /* Above 1200px the fixed game-trigger box occupies the left margin;
-   widen the container so it sits close to the button instead of
-   leaving a large empty gap on wide screens. */
+   widen the container so it isn't left with a large empty gap, while
+   keeping a comfortable indent instead of hugging the button. */
 @media (min-width: 1200px) {
   .container {
-    width: min(1480px, calc(100% - 500px));
+    width: min(1300px, calc(100% - 650px));
   }
 }
 
