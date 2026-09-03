@@ -75,14 +75,14 @@ window.POSTS = [
   {
     title: "RAG Retrieval Architecture",
     excerpt:
-      "Hybrid retrieval, chunk strategy, and query understanding techniques that actually move answer quality.",
+      "A full production retrieval stack: hybrid search, metadata filtering, reranking, chunking, access control, and evaluation, not just a vector database.",
     href: "/posts/rag-retrieval-architecture/",
     dateLabel: "March 2026",
     publishedAt: "2026-03-01",
     tags: ["Retrieval", "NLP", "Python"],
     archiveTitle: "RAG Retrieval Architecture",
     archiveExcerpt:
-      "How hybrid search, chunk boundaries, query rewriting, and keyword boosting improve downstream LLM quality.",
+      "Why retrieval, not the LLM, is usually the ceiling on RAG quality: hybrid search, reranking, chunking, metadata, query routing, access control, and how to evaluate it all.",
   },
   {
     title: "Books That Can make you a Better AI Engineer",

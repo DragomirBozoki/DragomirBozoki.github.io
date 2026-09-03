@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -31,7 +32,7 @@
         <div class="post-meta">
           <span>March 2026</span>
           <span class="meta-dot">.</span>
-          <span>15 min read</span>
+          <span>30 min read</span>
           <span class="meta-dot">.</span>
           <a href="#">RAG</a>
           <a href="#">Retrieval</a>
@@ -43,59 +44,921 @@
 
         <div class="post-body">
           <p>
-            Many teams try to fix weak answers by switching models. In production systems, the bigger issue is usually retrieval quality.
-            If the context sent into the model is incomplete, stale, or loosely related, even the best model cannot recover.
+            Many teams try to improve weak RAG answers by switching models. A stronger LLM can help with
+            reasoning, formatting, instruction following, and synthesis. But it cannot reconstruct information
+            that never reached its context window.
           </p>
-
+          <p>
+            If the retrieval layer returns the wrong document, misses the paragraph containing the answer, drops
+            an important qualifier, or retrieves five loosely related chunks around the right one, generation
+            starts from a compromised state. The failure happens before the model begins answering.
+          </p>
           <div class="post-callout">
-            Better retrieval raises the answer ceiling for every model you use, while model swaps alone often hide core search issues.
+            Better retrieval raises the answer ceiling for every model you use. Model upgrades alone often hide
+            weaknesses in the search layer.
           </div>
-
-          <h2>The Core Failure Pattern</h2>
           <p>
-            A user asks for a specific person, policy code, or document identifier. Pure vector search returns semantically related text,
-            but misses the exact chunk carrying the answer. The response looks confident but drifts from the source.
+            That is why I tend to think about production RAG systems less as "LLM applications" and more as
+            <strong>retrieval systems with a language model attached to the end</strong>.
           </p>
 
-          <h2>Hybrid Retrieval Beats Pure Vector</h2>
+          <h2>RAG is a pipeline, not a vector database</h2>
+          <p>A simplified RAG implementation is often presented as:</p>
+<pre><code>User question
+     -> Embedding
+     -> Vector search
+     -> Top K chunks
+     -> LLM
+     -> Answer</code></pre>
+          <p>That works surprisingly well for a prototype. It also hides most of the problems that appear later.</p>
+          <p>A production retrieval pipeline usually starts looking more like this:</p>
+<pre><code>                         +----------------------+
+                         | Conversation state   |
+                         +-----------+----------+
+                                     |
+                                     v
+User question --------------> Query understanding
+                                     |
+                            +--------+--------+
+                            |                 |
+                            v                 v
+                     Query rewrite      Metadata extraction
+                            |                 |
+                            +--------+--------+
+                                     v
+                            Retrieval request
+                                     |
+                     +---------------+---------------+
+                     |                               |
+                     v                               v
+               Dense retrieval                Lexical retrieval
+                     |                               |
+                     +---------------+---------------+
+                                     v
+                                Fusion
+                                     |
+                                     v
+                                Reranking
+                                     |
+                                     v
+                           Context construction
+                                     |
+                                     v
+                                   LLM
+                                     |
+                                     v
+                           Grounded response</code></pre>
+          <p>Every stage can improve the answer. Every stage can also silently destroy it.</p>
+
+          <h2>The core failure pattern</h2>
+          <p>Consider a knowledge base containing hundreds of internal documents. A user asks:</p>
+          <p><em>What is the reimbursement limit for employee category B under policy FIN-217?</em></p>
+          <p>The correct chunk contains:</p>
+<pre><code>Policy: FIN-217
+
+Employee category B:
+Maximum reimbursement: EUR 850 per calendar year.</code></pre>
+          <p>A pure semantic search may return:</p>
+          <ol>
+            <li>a general travel reimbursement policy</li>
+            <li>a paragraph explaining employee categories</li>
+            <li>another policy containing EUR 850</li>
+            <li>a related finance FAQ</li>
+            <li>the introduction to FIN-217</li>
+          </ol>
+          <p>Everything is semantically relevant. Nothing answers the question.</p>
           <p>
-            Hybrid retrieval combines dense similarity with lexical matching. Dense vectors capture intent, while keyword signals preserve exactness
-            for names, IDs, and compliance language.
+            The generator then receives plausible context and produces a plausible answer. That is one of the more
+            dangerous RAG failure modes because the final response does not necessarily look broken. The retrieval
+            is <strong>approximately correct</strong>, while the answer requires something <strong>exactly
+            correct</strong>.
+          </p>
+          <p>
+            Names, policy IDs, ticket numbers, dates, product codes, abbreviations, amounts, and legal terminology
+            are particularly good at exposing this problem.
           </p>
 
+          <h2>Semantic similarity is not relevance</h2>
+          <p>Vector search solves an important problem: which pieces of text are semantically similar to this query?</p>
+          <p>But semantic similarity and answer relevance are not identical. Suppose the query is:</p>
+          <p><em>What happened to incident INC-18473?</em></p>
+          <p>The embedding representation captures concepts such as:</p>
+<pre><code>incident
+problem
+status
+failure
+resolution</code></pre>
+          <p>
+            That is useful. But the most important token may simply be <code>INC-18473</code>. A lexical search
+            engine can recognize that exact identifier immediately. A dense embedding may treat several incident
+            descriptions as semantically equivalent.
+          </p>
+          <p>
+            This is why I rarely consider pure vector search sufficient once the corpus contains structured
+            terminology.
+          </p>
+
+          <h2>Hybrid retrieval</h2>
+          <p>Hybrid retrieval combines two different views of relevance.</p>
+
+          <h3>Dense retrieval</h3>
+          <p>
+            Dense embeddings are good at understanding meaning. They can connect
+            <em>"How much vacation do I have?"</em> with <em>"Annual leave entitlement"</em> even though the
+            wording is different.
+          </p>
+
+          <h3>Lexical retrieval</h3>
+          <p>Keyword-based retrieval is good at exactness. It preserves:</p>
+          <ul>
+            <li>names</li>
+            <li>identifiers</li>
+            <li>acronyms</li>
+            <li>numbers</li>
+            <li>uncommon terminology</li>
+            <li>product codes</li>
+            <li>policy references</li>
+          </ul>
+          <p>A useful retrieval system benefits from both. Conceptually:</p>
 <pre><code>async def hybrid_search(query, top_k=10):
-    keywords = extract_keywords(query)
-    vector_hits = await search_dense(query, limit=top_k * 2)
-    lexical_hits = await search_lexical(keywords, limit=top_k)
-    return rerank(vector_hits, lexical_hits)[:top_k]</code></pre>
+    dense_hits = await search_dense(
+        query,
+        limit=top_k * 3,
+    )
 
-          <h2>Chunking Strategy Is a Quality Lever</h2>
+    lexical_hits = await search_lexical(
+        query,
+        limit=top_k * 2,
+    )
+
+    combined = fuse_results(
+        dense_hits,
+        lexical_hits,
+    )
+
+    return combined[:top_k]</code></pre>
           <p>
-            Fixed-size chunks often cut across logical boundaries. Keep sentence or paragraph boundaries and use overlap so linked facts remain available
-            when queries land near edges.
+            The important part is not simply running two searches. The important part is deciding how their
+            rankings should interact.
           </p>
 
-<pre><code>def chunk_text(text, max_chars=900, overlap=220):
-    # Preserve sentence boundaries and retain overlap
-    ...</code></pre>
-
-          <h2>Rewrite Ambiguous Queries</h2>
+          <h2>Rank fusion</h2>
           <p>
-            Queries like "what about that regulation" lack searchable detail. Rewriting with conversation context creates clearer retrieval targets,
-            which improves both recall and rank position.
+            Dense and lexical engines usually return scores that are not directly comparable. A vector similarity
+            score of <code>0.82</code> does not necessarily have any mathematical relationship with a BM25 score of
+            <code>12.4</code>. Simply adding them is often meaningless.
+          </p>
+          <p>
+            One approach is to normalize both score distributions. Another is to work with ranking position rather
+            than raw score. A common conceptual approach is reciprocal rank fusion:
+          </p>
+<pre><code>score(document) =
+    1 / (k + dense_rank)
+    +
+    1 / (k + lexical_rank)</code></pre>
+          <p>
+            A document that appears near the top of both rankings receives a strong combined score. This has
+            another useful property: documents that are extremely strong in one retrieval strategy can still
+            survive even when they rank poorly in the other. That matters for queries containing either very
+            strong semantic intent or very specific lexical constraints.
           </p>
 
-          <h2>Measure Before You Tune</h2>
+          <h2>Retrieval should produce candidates, not the final context</h2>
+          <p>Another architecture mistake is treating the result of the first search as the final context, for example:</p>
+<pre><code>Vector DB
+   -> Top 5
+   -> LLM</code></pre>
+          <p>I prefer to separate <strong>candidate retrieval</strong> from <strong>context selection</strong>.</p>
           <p>
-            Track retrieval metrics such as Recall@K and MRR on a fixed evaluation set. This gives objective feedback when adjusting chunk size,
-            reranking, filters, or fusion parameters.
+            The first stage should optimize recall. The second stage should optimize precision. Instead of
+            retrieving exactly five chunks, the system might retrieve 30 candidate chunks from several retrieval
+            strategies. Then a reranking stage selects the most useful:
           </p>
+<pre><code>30 candidates
+      -> reranker
+      -> 5-8 final chunks</code></pre>
+          <p>This gives the system room to recover from imperfect initial ranking.</p>
+
+          <h2>Reranking</h2>
+          <p>Embedding similarity answers approximately: are these two pieces of text about similar things?</p>
+          <p>
+            A reranker can evaluate a much more direct question: given this exact query, how useful is this exact
+            document for answering it? That distinction is important.
+          </p>
+          <p>A retrieval pipeline can therefore use a relatively inexpensive first stage to reduce the corpus:</p>
+<pre><code>100,000 chunks
+      -> retrieval
+      -> 30 candidates</code></pre>
+          <p>and then spend more computation evaluating those candidates carefully:</p>
+<pre><code>30 candidates
+      -> cross-encoder / reranker
+      -> 6 final chunks</code></pre>
+          <p>
+            Reranking is particularly valuable when many documents discuss almost the same subject. Imagine an HR
+            knowledge base containing:
+          </p>
+          <ul>
+            <li>Annual Leave Policy</li>
+            <li>Annual Leave Manager Guide</li>
+            <li>Annual Leave FAQ</li>
+            <li>Annual Leave 2025 Update</li>
+            <li>Annual Leave Regional Exceptions</li>
+            <li>Annual Leave Payroll Instructions</li>
+          </ul>
+          <p>
+            All of them may have extremely high semantic similarity to <em>"How many annual leave days do
+            employees in Slovenia receive?"</em> The difficult problem is no longer retrieval. It is
+            <strong>ranking within a dense cluster of relevant-looking documents</strong>.
+          </p>
+
+          <h2>Metadata is part of retrieval</h2>
+          <p>Not every search decision should be made using text similarity. Suppose every indexed chunk carries metadata:</p>
+<pre><code>{
+  "country": "SI",
+  "department": "HR",
+  "language": "sl",
+  "document_type": "policy",
+  "effective_year": 2026,
+  "access_level": "employee"
+}</code></pre>
+          <p>A query may imply some of these constraints:</p>
+          <p><em>What is the current Slovenian annual leave policy?</em></p>
+          <p>
+            There is little reason to retrieve a Croatian policy from 2024 and hope the reranker removes it later.
+            The retrieval request can be constrained first:
+          </p>
+<pre><code>country = SI
+effective_year = 2026
+document_type = policy</code></pre>
+          <p>
+            and then semantic and lexical ranking can operate inside that smaller candidate set. This is not only
+            a performance optimization. It is part of relevance.
+          </p>
+
+          <h2>Metadata filtering vs semantic filtering</h2>
+          <p>These should not be confused.</p>
+          <p>Semantic retrieval asks: which documents discuss this concept?</p>
+          <p>Metadata filtering asks: which documents are even eligible to answer this question?</p>
+          <p>
+            For example, <em>"How do I request maternity leave?"</em> may require semantic retrieval. But
+            <em>"How do I request maternity leave in Serbia?"</em> contains both a semantic intent (maternity leave
+            procedure) and a metadata constraint (country = Serbia). Treating both parts as embedding text wastes
+            structure that is already available. A good retrieval pipeline separates them.
+          </p>
+
+          <h2>Chunking is part of the retrieval model</h2>
+          <p>
+            Chunking is often treated as preprocessing. In practice, chunk boundaries define the objects your
+            search engine is capable of retrieving. That makes chunking part of the retrieval architecture.
+          </p>
+          <p>Consider this paragraph:</p>
+<pre><code>Employees may work remotely for up to three days per week.
+
+Employees working from another country require written approval
+from HR and the employee's department manager.
+
+Requests exceeding 30 consecutive days must additionally be
+reviewed by Legal.</code></pre>
+          <p>If the text is split badly:</p>
+<pre><code>Chunk A:
+Employees may work remotely for up to three days per week.
+Employees working from another country require
+
+Chunk B:
+written approval from HR and the employee's department manager.
+Requests exceeding 30 consecutive days...</code></pre>
+          <p>
+            a query about international remote work may retrieve only one half of the rule. The model receives an
+            incomplete fact. No generation prompt can repair that reliably.
+          </p>
+
+          <h2>Fixed-length chunking is convenient, not intelligent</h2>
+          <p>A naive implementation might do:</p>
+<pre><code>for i in range(0, len(text), 800):
+    chunks.append(text[i:i + 800])</code></pre>
+          <p>It is fast. It also ignores structure. Better chunking should try to preserve boundaries such as:</p>
+          <ul>
+            <li>headings</li>
+            <li>paragraphs</li>
+            <li>sentences</li>
+            <li>table rows</li>
+            <li>FAQ question-answer pairs</li>
+            <li>numbered procedures</li>
+            <li>policy sections</li>
+          </ul>
+          <p>A simple structure-aware implementation might conceptually look like:</p>
+<pre><code>def chunk_sections(sections, max_chars=1200):
+    chunks = []
+
+    for section in sections:
+        if len(section.text) <= max_chars:
+            chunks.append(section)
+        else:
+            chunks.extend(
+                split_by_sentence(section)
+            )
+
+    return chunks</code></pre>
+          <p>
+            The correct strategy depends heavily on the document type. An FAQ and a legal policy should not
+            necessarily use the same chunker.
+          </p>
+
+          <h2>Overlap helps, until it does not</h2>
+          <p>Chunk overlap is useful when relevant information crosses a boundary. For example:</p>
+<pre><code>Chunk 1:
+AAAA BBBB CCCC DDDD
+
+Chunk 2:
+CCCC DDDD EEEE FFFF</code></pre>
+          <p>
+            The repeated region prevents connected facts from becoming completely separated. But excessive overlap
+            has consequences. It can produce several near-identical retrieval results:
+          </p>
+<pre><code>result 1 -> paragraph A + paragraph B
+result 2 -> paragraph B + paragraph C
+result 3 -> paragraph C + paragraph D</code></pre>
+          <p>
+            Now three of the top results may contain mostly duplicated text. This reduces context diversity and
+            wastes tokens. Overlap should therefore be treated as a parameter that affects retrieval quality, not
+            as a universally good setting.
+          </p>
+
+          <h2>Parent and child retrieval</h2>
+          <p>Sometimes the best unit for search is not the best unit for generation. A small chunk may be excellent for retrieval:</p>
+          <p><em>Remote work outside the country requires HR approval.</em></p>
+          <p>But the LLM may need the surrounding policy section to understand:</p>
+          <ul>
+            <li>exceptions</li>
+            <li>duration limits</li>
+            <li>approval hierarchy</li>
+            <li>effective dates</li>
+          </ul>
+          <p>One useful pattern is:</p>
+<pre><code>small child chunks
+      -> search
+      -> retrieve matching child
+      -> expand to parent section
+      -> LLM context</code></pre>
+          <p>
+            This gives the embedding model precise search units while preserving broader context during
+            generation.
+          </p>
+
+          <h2>Tables need different treatment</h2>
+          <p>Tables are particularly easy to destroy during ingestion. Consider:</p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>Country</th><th>Max remote days</th><th>Approval</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Serbia</td><td>30</td><td>HR</td></tr>
+                <tr><td>Slovenia</td><td>60</td><td>Manager + HR</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Flattening this poorly might produce:</p>
+<pre><code>Country Max remote days Approval Serbia 30 HR Slovenia 60 Manager HR</code></pre>
+          <p>
+            The relationships still exist for a human. They are much less explicit for retrieval. A better
+            representation can serialize each row independently:
+          </p>
+<pre><code>Country: Serbia
+Maximum remote-work duration: 30 days
+Approval required: HR</code></pre>
+<pre><code>Country: Slovenia
+Maximum remote-work duration: 60 days
+Approval required: Manager and HR</code></pre>
+          <p>
+            Retrieval architecture starts during ingestion. If the index contains ambiguous representations, no
+            search algorithm will completely fix them later.
+          </p>
+
+          <h2>Query rewriting</h2>
+          <p>Retrieval systems rarely receive clean standalone questions. Users speak conversationally. Consider:</p>
+<pre><code>User:
+What is our relocation policy for Germany?
+
+Assistant:
+...
+
+User:
+And what about France?</code></pre>
+          <p>
+            The second query is <em>"And what about France?"</em> Embedding that literally loses most of the
+            useful intent. Before retrieval, it can be rewritten into <em>"What is our relocation policy for
+            France?"</em> Now the query contains a meaningful retrieval target.
+          </p>
+
+          <h2>Query rewriting should be conservative</h2>
+          <p>There is also a failure mode on the other side. An LLM used for query rewriting can accidentally change the user's intent.</p>
+          <p>The original query:</p>
+          <p><em>Can contractors receive the relocation allowance?</em></p>
+          <p>should not become:</p>
+          <p><em>What relocation allowance do contractors receive?</em></p>
+          <p>The rewrite has silently assumed eligibility. A good rewrite should improve searchability while preserving uncertainty. Conceptually:</p>
+<pre><code>rewritten = rewrite_query(
+    current_question=query,
+    conversation=history,
+    rules=[
+        "preserve user intent",
+        "resolve pronouns",
+        "restore omitted entities",
+        "do not assume facts",
+    ],
+)</code></pre>
+          <p>The query rewriting model is part of the retrieval system. It deserves evaluation just like the search engine does.</p>
+
+          <h2>Sometimes one query is not enough</h2>
+          <p>Some questions contain multiple retrieval requirements. For example:</p>
+          <p><em>Compare parental leave in Serbia and Slovenia and tell me which policy changed most recently.</em></p>
+          <p>This can be decomposed into subqueries:</p>
+<pre><code>1. Current parental leave policy Serbia
+2. Current parental leave policy Slovenia
+3. Effective dates / revision history</code></pre>
+          <p>Each query can retrieve independently. The final context can then be assembled from all three result sets. This works particularly well for:</p>
+          <ul>
+            <li>comparisons</li>
+            <li>multi-entity questions</li>
+            <li>procedures with several steps</li>
+            <li>questions spanning multiple document types</li>
+          </ul>
+          <p>The alternative is hoping one embedding vector represents every dimension of a complex query equally well. Often it does not.</p>
+
+          <h2>Retrieval is also an access-control boundary</h2>
+          <p>Enterprise RAG adds another constraint: a relevant document is not necessarily an allowed document.</p>
+          <p>
+            Imagine retrieval returns a perfect answer from a manager-only compensation document to a regular
+            employee. From a ranking perspective, the system worked perfectly. From a system-design perspective,
+            it failed completely.
+          </p>
+          <p>Authorization therefore needs to happen before restricted content reaches generation. Conceptually:</p>
+<pre><code>User
+ -> Resolve identity / role
+ -> Determine access scope
+ -> Retrieve only allowed documents
+ -> Rerank
+ -> Generate</code></pre>
+          <p>
+            Filtering the final answer is too late. Once unauthorized content has entered the model context, the
+            security boundary has already been crossed.
+          </p>
+
+          <h2>Freshness matters</h2>
+          <p>Enterprise knowledge changes. Policies are updated. Prices change. Contacts move. Documentation becomes obsolete.</p>
+          <p>
+            Without version and validity metadata, the retriever may confidently return an older document simply
+            because it matches the wording better. Useful metadata might include:
+          </p>
+<pre><code>created_at
+updated_at
+effective_from
+effective_until
+version
+is_active
+supersedes</code></pre>
+          <p>
+            The retrieval system can then distinguish a highly similar old document from a slightly less similar
+            current policy. For many business questions, the second one is clearly more relevant.
+          </p>
+
+          <h2>Context construction</h2>
+          <p>Even after reranking, retrieval is not finished. Suppose the system selected six chunks. The next question is: how should those chunks be presented to the model?</p>
+          <p>Simply concatenating everything works, but context quality can often be improved. I generally want each chunk to preserve useful provenance:</p>
+<pre><code>[Document]
+HR_Remote_Work_Policy_2026.pdf
+
+[Section]
+International Remote Work
+
+[Content]
+Employees working outside their registered country...</code></pre>
+          <p>
+            This helps in several ways. The model can distinguish separate sources. Citation generation becomes
+            easier. Conflicting documents become visible. Debugging becomes far easier because we can inspect
+            exactly what information the model received.
+          </p>
+
+          <h2>Do not stuff the context window</h2>
+          <p>Larger context windows create a tempting strategy: retrieve more. That is not always better.</p>
+          <p>
+            Suppose the correct answer appears in chunk 2. If you provide 2 relevant chunks, the signal is strong.
+            If you provide 2 relevant chunks plus 18 loosely related chunks, you have increased the amount of
+            information while reducing the relative importance of the answer.
+          </p>
+          <p>The objective should not be to maximize retrieved tokens. It should be to maximize useful evidence per token. This is another reason why reranking and deduplication matter.</p>
+
+          <h2>Deduplication</h2>
+          <p>A search index often contains near-duplicates. Examples include:</p>
+          <ul>
+            <li>document revisions</li>
+            <li>copied SharePoint pages</li>
+            <li>repeated headers</li>
+            <li>translated copies</li>
+            <li>overlapping chunks</li>
+            <li>generated summaries</li>
+            <li>archived versions</li>
+          </ul>
+          <p>Without deduplication, the top results can become:</p>
+<pre><code>1. Policy paragraph
+2. Almost identical policy paragraph
+3. Same paragraph from older document
+4. Same paragraph with overlap
+5. Related FAQ</code></pre>
+          <p>
+            The retriever appears confident because the same information dominates the ranking. In reality, the
+            context has poor diversity. Deduplication can happen using document IDs, parent IDs, normalized text
+            hashes, semantic similarity, or version metadata, depending on the ingestion architecture.
+          </p>
+
+          <h2>Retrieval confidence is not answer confidence</h2>
+          <p>Another useful distinction: retrieval confidence and answer confidence are different things.</p>
+          <p>If every retrieved result has weak relevance, the correct system behaviour may be:</p>
+          <p><em>I could not find enough information in the available documents.</em></p>
+          <p>That is usually better than forcing the LLM to synthesize an answer from weak evidence. A retrieval pipeline can expose signals such as:</p>
+<pre><code>top score
+score distribution
+reranker score
+number of supporting sources
+agreement between retrieval methods</code></pre>
+          <p>These can inform whether generation should proceed normally, request clarification, or refuse to make a grounded claim.</p>
+
+          <h2>The "no result" path matters</h2>
+          <p>A surprisingly important RAG capability is being able to return nothing.</p>
+          <p>
+            If the system always produces five chunks, even for completely unrelated questions, the LLM will
+            always receive something. Consider: <em>what is the company's policy for working from Mars?</em>
+          </p>
+          <p>A nearest-neighbour database will still have nearest neighbours. That does not make them relevant. The system needs a path like:</p>
+<pre><code>query
+ -> retrieval
+ -> insufficient evidence
+ -> "No supporting information found"</code></pre>
+          <p>instead of:</p>
+<pre><code>query
+ -> retrieve unrelated text
+ -> LLM improvisation</code></pre>
+          <p>Abstention is part of retrieval quality.</p>
+
+          <h2>Evaluate retrieval separately from generation</h2>
+          <p>If the final answer is wrong, there are at least two major possibilities.</p>
+
+          <h3>Retrieval failure</h3>
+          <p>The correct evidence never reached the model.</p>
+
+          <h3>Generation failure</h3>
+          <p>The correct evidence was retrieved, but the model interpreted or expressed it incorrectly.</p>
+
+          <p>
+            These require completely different fixes. Changing the prompt will not repair missing retrieval.
+            Changing the embedding model will not repair an LLM that ignores explicit context. That is why I
+            prefer evaluating retrieval independently.
+          </p>
+
+          <h2>Recall@K</h2>
+          <p>One of the simplest useful metrics is Recall@K. Suppose you have 100 evaluation questions with known relevant documents.</p>
+          <p>If the correct source appears somewhere in the top 5 results for 91 questions:</p>
+<pre><code>Recall@5 = 0.91</code></pre>
+          <p>This answers: how often does retrieval provide the generator with a chance to answer correctly? If Recall@K is poor, generation tuning is premature.</p>
+
+          <h2>Mean Reciprocal Rank</h2>
+          <p>Recall tells you whether the correct result appeared. It does not tell you where. Consider two systems.</p>
+          <p><strong>System A</strong></p>
+<pre><code>1. Correct result
+2. ...
+3. ...</code></pre>
+          <p><strong>System B</strong></p>
+<pre><code>1. ...
+2. ...
+3. ...
+4. ...
+5. Correct result</code></pre>
+          <p>Both may have identical Recall@5. System A is still preferable. Mean Reciprocal Rank gives more credit when the first relevant result appears higher:</p>
+<pre><code>RR = 1 / rank</code></pre>
+          <p>so:</p>
+<pre><code>rank 1 -> 1.00
+rank 2 -> 0.50
+rank 5 -> 0.20</code></pre>
+          <p>Averaging reciprocal rank across the evaluation set gives MRR.</p>
+
+          <h2>Build a retrieval test set</h2>
+          <p>You cannot reliably optimize retrieval by clicking through a chatbot. I prefer a fixed evaluation dataset containing cases such as:</p>
+<pre><code>{
+  "query": "What is policy FIN-217?",
+  "relevant_documents": ["FIN-217"],
+  "expected_entities": ["850 EUR", "category B"]
+}</code></pre>
+          <p>The dataset should include more than easy semantic questions. Add queries involving:</p>
+          <ul>
+            <li>exact IDs</li>
+            <li>person names</li>
+            <li>abbreviations</li>
+            <li>misspellings</li>
+            <li>multilingual wording</li>
+            <li>follow-up questions</li>
+            <li>multiple documents</li>
+            <li>outdated policies</li>
+            <li>queries that should return no result</li>
+          </ul>
+          <p>Then every architectural change can be compared against the same baseline.</p>
+
+          <h2>Evaluate by query type</h2>
+          <p>A single aggregate score can hide important regressions. Imagine a system achieves:</p>
+<pre><code>Recall@5 = 92%</code></pre>
+          <p>That sounds good. But splitting by query type might show:</p>
+<pre><code>General semantic questions        98%
+Exact identifier queries          71%
+Person-name queries               84%
+Follow-up conversational queries  76%</code></pre>
+          <p>Now the architecture problem becomes much clearer. You might not need a new embedding model at all. You may need:</p>
+          <ul>
+            <li>lexical retrieval for IDs</li>
+            <li>entity-aware search for names</li>
+            <li>query rewriting for follow-ups</li>
+          </ul>
+          <p>Evaluation should tell you what to change.</p>
+
+          <h2>Debug the retrieval trace</h2>
+          <p>When an answer is wrong, I want to see something like:</p>
+<pre><code>ORIGINAL QUERY
+"What about the Slovenian version?"
+
+REWRITTEN QUERY
+"What is the Slovenian remote work policy?"
+
+FILTERS
+country = SI
+document_type = policy
+
+DENSE RESULTS
+1. Remote Work Policy SI
+2. Hybrid Work FAQ SI
+3. Remote Work Policy RS
+
+LEXICAL RESULTS
+1. Remote Work Policy SI
+2. Slovenian Employment Guide
+
+FUSED RESULTS
+...
+
+RERANKED RESULTS
+...
+
+FINAL CONTEXT
+...</code></pre>
+          <p>
+            Without this trace, debugging RAG quickly becomes guessing. You see the final answer but not the
+            decisions that produced it. Production observability should expose the retrieval pipeline, not only
+            model latency and token usage.
+          </p>
+
+          <h2>Latency is an architecture constraint</h2>
+          <p>A theoretically excellent pipeline can still be unusable if it adds:</p>
+<pre><code>query rewrite       900 ms
+dense retrieval     300 ms
+keyword retrieval   200 ms
+reranker           1600 ms
+LLM generation     3000 ms</code></pre>
+          <p>Now the user waits six seconds. So retrieval quality has to be balanced against latency. Useful techniques include:</p>
+          <ul>
+            <li>run dense and lexical search concurrently</li>
+            <li>avoid rewriting already-complete queries</li>
+            <li>cache embeddings</li>
+            <li>cache stable retrieval results where appropriate</li>
+            <li>rerank only a bounded candidate set</li>
+            <li>use smaller models for routing and rewriting</li>
+            <li>skip unnecessary stages for simple exact queries</li>
+          </ul>
+          <p>The best retrieval pipeline is not necessarily the one with the most components. It is the one that applies the right components to the right queries.</p>
+
+          <h2>Route queries before searching</h2>
+          <p>Not every request needs the same retrieval strategy. Consider:</p>
+          <p><em>"What is FIN-217?"</em> &mdash; this may be predominantly lexical.</p>
+          <p><em>"How does our company handle extended remote work?"</em> &mdash; this may benefit more from semantic retrieval.</p>
+          <p><em>"Compare the German and French policies."</em> &mdash; this may need decomposition.</p>
+          <p><em>"Thanks!"</em> &mdash; this may need no retrieval at all.</p>
+          <p>A mature RAG system can classify query intent before launching an expensive retrieval pipeline. Conceptually:</p>
+<pre><code>route = classify_query(query)
+
+if route == "exact_lookup":
+    return lexical_first(query)
+
+if route == "semantic":
+    return hybrid_search(query)
+
+if route == "comparison":
+    return multi_query_search(query)
+
+if route == "conversation":
+    return no_retrieval()</code></pre>
+          <p>This is often more effective than forcing every query through one universal search strategy.</p>
+
+          <h2>Multilingual retrieval adds another layer</h2>
+          <p>Multilingual enterprise systems introduce a subtle problem. The user may ask in Serbian:</p>
+          <p><em>Koliko dana godi&scaron;njeg odmora imam?</em></p>
+          <p>while the source document is in English: <em>Annual leave entitlement</em>.</p>
+          <p>
+            A multilingual embedding model may bridge this gap well. Keyword retrieval cannot, unless the corpus
+            or query is normalized appropriately.
+          </p>
+          <p>Now imagine the query also contains <code>POL-184</code>. Translation should preserve that identifier exactly.</p>
+          <p>A multilingual retrieval pipeline therefore has to balance:</p>
+          <ul>
+            <li>cross-language semantic similarity</li>
+            <li>exact lexical terms</li>
+            <li>language metadata</li>
+            <li>entity preservation</li>
+            <li>possibly translated or rewritten queries</li>
+          </ul>
+          <p>This is another case where hybrid retrieval becomes more useful than treating embeddings as the entire search architecture.</p>
+
+          <h2>Embedding models matter, but later than people think</h2>
+          <p>Embedding quality absolutely matters. Different models behave differently across languages, domains, short queries, long documents, code, and technical terminology.</p>
+          <p>But I would rarely make the embedding model my first tuning target. Before swapping embeddings, I would verify:</p>
+<pre><code>Are documents chunked correctly?
+Are exact terms searchable?
+Are filters correct?
+Are old documents excluded?
+Are follow-up queries rewritten?
+Are relevant candidates reranked?
+Is the evaluation set representative?</code></pre>
+          <p>A better embedding model cannot compensate for a broken ingestion or retrieval architecture.</p>
+
+          <h2>Generation is the last stage</h2>
+          <p>Only after retrieval works well do I focus heavily on generation. At that point the prompt can tell the model to:</p>
+          <ul>
+            <li>answer only from retrieved context</li>
+            <li>distinguish conflicting sources</li>
+            <li>cite the supporting document</li>
+            <li>state when evidence is insufficient</li>
+            <li>preserve numbers and identifiers exactly</li>
+            <li>avoid inferring unsupported facts</li>
+          </ul>
+          <p>
+            This can improve reliability considerably. But it works because the evidence is already good. Prompt
+            engineering should refine a strong retrieval pipeline, not compensate for a weak one.
+          </p>
+
+          <h2>A production-oriented retrieval stack</h2>
+          <p>A retrieval architecture I generally find more useful than the minimal vector-search pattern looks like this:</p>
+<pre><code>                           USER QUERY
+                               |
+                               v
+                    +----------------------+
+                    | Query understanding  |
+                    +-----------+----------+
+                               |
+                   +-----------+-----------+
+                   |                       |
+                   v                       v
+             Conversation             Metadata /
+               rewrite                  entities
+                   |                       |
+                   +-----------+-----------+
+                               v
+                         Query routing
+                               |
+                 +-------------+-------------+
+                 |             |             |
+                 v             v             v
+              Dense         Lexical       Exact lookup
+                 |             |             |
+                 +-------------+-------------+
+                               v
+                            Fusion
+                               |
+                               v
+                       Candidate pool
+                               |
+                               v
+                           Reranker
+                               |
+                               v
+                     Deduplication /
+                     parent expansion
+                               |
+                               v
+                    Context construction
+                               |
+                               v
+                     Evidence threshold
+                         |           |
+                        pass        fail
+                         |           |
+                         v           v
+                        LLM       Abstain /
+                         |        clarify
+                         v
+                  Grounded answer
+                         |
+                         v
+                  Sources / citations</code></pre>
+          <p>Not every application needs every box. But thinking in these layers makes retrieval problems much easier to reason about.</p>
+
+          <h2>A practical debugging order</h2>
+          <p>When a RAG answer is bad, I usually would not start by touching the LLM. I would inspect the system roughly in this order:</p>
+
+          <h3>1. Was the answer present in the source corpus?</h3>
+          <p>If not, this is a knowledge problem.</p>
+
+          <h3>2. Was the correct source indexed?</h3>
+          <p>If not, this is an ingestion problem.</p>
+
+          <h3>3. Was the correct chunk created?</h3>
+          <p>If not, this is a parsing or chunking problem.</p>
+
+          <h3>4. Did retrieval return that chunk?</h3>
+          <p>If not, this is a search problem.</p>
+
+          <h3>5. Did the reranker keep it?</h3>
+          <p>If not, this is a ranking problem.</p>
+
+          <h3>6. Was it included in the final context?</h3>
+          <p>If not, this is a context-construction problem.</p>
+
+          <h3>7. Did the LLM receive the correct evidence and still answer incorrectly?</h3>
+          <p>Only now is it primarily a generation problem.</p>
+
+          <p>This distinction saves a lot of pointless model and prompt experimentation.</p>
+
+          <h2>What I measure</h2>
+          <p>For retrieval itself:</p>
+<pre><code>Recall@K
+MRR
+Precision@K
+nDCG</code></pre>
+          <p>For system behaviour:</p>
+<pre><code>retrieval latency
+reranking latency
+context size
+duplicate rate
+no-result rate
+filter accuracy</code></pre>
+          <p>For the final RAG answer:</p>
+<pre><code>answer correctness
+groundedness
+source correctness
+citation accuracy
+answer completeness</code></pre>
+          <p>The important part is keeping these layers separate. Otherwise a single "answer quality" score tells you very little about where the system is failing.</p>
+
+          <h2>What usually improves RAG the most</h2>
+          <p>In practice, the largest improvements often come from fairly unglamorous changes:</p>
+<pre><code>better document parsing
+better chunk boundaries
+hybrid retrieval
+metadata filtering
+query rewriting
+reranking
+removing stale documents
+deduplicating results
+better evaluation data</code></pre>
+          <p>None of these involve replacing the main LLM. That is exactly the point. The quality of the final answer is bounded by the quality of the evidence that reaches it.</p>
+
+          <h2>Retrieval quality sets the ceiling</h2>
+          <p>A powerful language model can make poor evidence sound convincing. That is not an advantage.</p>
+          <p>
+            In knowledge-intensive applications, I want the opposite behaviour. I want the retrieval system to
+            make the evidence precise enough that the generation step becomes almost boring. The ideal context
+            already contains:
+          </p>
+          <ul>
+            <li>the right document</li>
+            <li>the right section</li>
+            <li>the right version</li>
+            <li>the exact number</li>
+            <li>the necessary qualifiers</li>
+            <li>enough neighbouring context to interpret it correctly</li>
+          </ul>
+          <p>Then the LLM's job is primarily to turn evidence into a useful answer.</p>
 
           <h2>Takeaway</h2>
           <p>
-            Retrieval architecture is the performance foundation of RAG. Strong model output starts with precise, high-relevance context.
-            Improve search first, then optimize generation.
+            RAG quality is not primarily determined by how large the language model is. It is determined by how
+            reliably the system can move from what the user meant to the smallest set of evidence needed to answer
+            correctly.
           </p>
+          <p>
+            That requires more than embeddings. It requires good ingestion, structure-aware chunking, hybrid
+            search, metadata, query understanding, reranking, deduplication, access control, freshness handling,
+            context construction, abstention, and evaluation.
+          </p>
+          <p>A useful way to think about the full system is:</p>
+<pre><code>Understand the query
+        -> Find broad candidates
+        -> Preserve exact signals
+        -> Filter impossible candidates
+        -> Rank by actual relevance
+        -> Construct clean evidence
+        -> Check whether evidence is sufficient
+        -> Generate</code></pre>
+          <p>
+            If the retrieval layer is strong, model upgrades tend to make a good system better. If retrieval is
+            weak, model upgrades mostly make the failure sound more fluent.
+          </p>
+          <p><strong>Improve search first. Then optimize generation.</strong></p>
         </div>
 
         <footer class="post-footer">
