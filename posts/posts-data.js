@@ -96,4 +96,16 @@ window.POSTS = [
     archiveExcerpt:
       "A practical reading order for engineers who want to build AI systems that scale, stay maintainable, and survive real production constraints.",
   },
+  {
+    title: "Before AI: Building a Biometric Access Controller in C",
+    excerpt:
+      "An early embedded systems project: a PIC18 microcontroller, dual UART, and a fingerprint sensor, built before most of my later AI and machine learning work.",
+    href: "/posts/before-ai-biometric-access-controller-in-c/",
+    dateLabel: "February 3, 2026",
+    publishedAt: "2026-02-03",
+    tags: ["Embedded Systems", "C", "PIC18"],
+    archiveTitle: "Before AI: Building a Biometric Access Controller in C",
+    archiveExcerpt:
+      "A PIC18F87K22 firmware prototype for fingerprint-based access control: what got implemented, what stayed a stub, and how I'd design it differently today.",
+  },
 ];

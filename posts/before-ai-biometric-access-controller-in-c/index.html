@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Before AI: Building a Biometric Access Controller in C - Dragomir Bo&#382;oki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="/">Dragomir Bo&#382;oki</a>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a class="active" href="/blog/">Writing</a></li>
+          <li><a href="/#experience">Experience</a></li>
+          <li><a href="/#education">Education</a></li>
+          <li><a href="/#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="/blog/">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>February 3, 2026</span>
+          <span class="meta-dot">.</span>
+          <span>11 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">Embedded Systems</a>
+          <a href="#">C</a>
+          <a href="#">PIC18</a>
+        </div>
+
+        <h1 class="post-title">Before AI: Building a Biometric Access Controller in C</h1>
+        <p class="post-subtitle">An early embedded systems project built around a PIC18 microcontroller, serial communication, and a fingerprint sensor.</p>
+
+        <p class="post-nav"><a href="https://github.com/DragomirBozoki/smarthouse1.X" target="_blank" rel="noreferrer">View source on GitHub &rarr;</a></p>
+
+        <div class="post-body">
+          <p>
+            Most of my recent work lives several abstraction layers above the hardware. LLMs, computer vision
+            systems, and Python services make it easy to forget what eventually sits underneath all of that. This
+            project comes from an earlier stage, when the problem was much more literal: send bytes to a
+            fingerprint sensor, wait for the right bytes to come back, and decide whether a user should be let
+            through.
+          </p>
+
+          <h2>An early smart-house project</h2>
+          <p>
+            This was built around a Microchip <strong>PIC18F87K22</strong>, as an authentication layer for a
+            small smart-house prototype. The idea was that access to alarm and device controls would sit behind
+            a fingerprint check instead of, or in addition to, a password.
+          </p>
+          <p>
+            I want to be direct about what the repository actually contains, because that is the point of writing
+            about it now. The fingerprint communication and comparison logic are the most developed part of the
+            project and they work as implemented. Alarm control and several fingerprint-management operations are
+            incomplete, some of them commented out entirely. That split between what got finished and what stayed
+            a stub is not something to hide behind a cleaner retelling. It is most of the story.
+          </p>
+
+          <h2>Hardware architecture</h2>
+          <p>The system sits between two serial links, with the microcontroller in the middle:</p>
+
+<pre><code>Terminal / User
+     |
+     | EUSART1
+     v
+PIC18F87K22
+     |
+     | EUSART2
+     v
+Fingerprint Module</code></pre>
+
+          <p>
+            EUSART1 faces the user side: a terminal sends simple text input and reads back menu prompts. EUSART2
+            faces the fingerprint module and carries the sensor's own command protocol. The microcontroller's job
+            is to sit in the middle, translate one side's requests into the other side's protocol, and translate
+            the response back.
+          </p>
+
+          <h2>Bytes have no meaning</h2>
+          <p>
+            UART sends bytes. It has no concept of a fingerprint, a user, a command, or a result, that meaning has
+            to be built entirely at the application layer. The fingerprint module used here does that with a
+            small tagged text protocol: commands look like <code>&lt;C&gt;CompareFingerprint&lt;/C&gt;</code> and
+            responses look like <code>&lt;R&gt;...&lt;/R&gt;</code>.
+          </p>
+          <p>
+            The firmware builds a command string, writes it out one character at a time over EUSART2, then blocks
+            until the sensor answers. Here is the actual send loop from <code>main.c</code>:
+          </p>
+
+<pre><code>char s2[30];
+strcpy(s2, "&lt;C&gt;CompareFingerprint&lt;/C&gt;");
+
+for (uint8_t i = 0; i &lt; strlen(s2); i++) {
+    EUSART2_Write(s2[i]);
+}
+
+while (!EUSART2_is_rx_ready());</code></pre>
+
+          <p>
+            Nothing here knows what a fingerprint is. It knows how to push characters onto a wire and how to wait
+            for characters to come back. Everything past that, deciding that <code>&lt;R&gt;FAIL&lt;/R&gt;</code>
+            means try again and a string starting with <code>&lt;R&gt;PASS</code> means let the user in, is
+            reconstructed by the application from a raw receive buffer.
+          </p>
+
+          <h2>Fingerprint authentication flow</h2>
+          <p>The implemented comparison path looks like this:</p>
+
+<pre><code>User requests authentication
+        |
+        v
+Prompt for fingerprint
+        |
+        v
+Send CompareFingerprint command
+        |
+        v
+Wait for sensor
+        |
+        v
+Parse result
+        |
+   +----+----+
+   |         |
+ Matched    No match
+   |         |
+   v         v
+  Menu      Retry
+             |
+             v
+      Reject after 3</code></pre>
+
+          <p>
+            The firmware keeps a simple attempt counter and allows up to three failed comparisons before giving up
+            and reporting that the limit was reached. That is worth naming precisely: it is basic application-level
+            retry logic layered over a hardware command protocol, not an access-control security model. There is no
+            lockout timer, no logging, and no protection against someone just power-cycling the board and trying
+            again. It does exactly one thing, cap the number of consecutive tries, and it does that one thing
+            correctly.
+          </p>
+
+          <h2>The protocol was larger than the implementation</h2>
+          <p>
+            The fingerprint module's own command reference, <code>listakomandi.txt</code>, lists considerably more
+            than what the firmware ended up using:
+          </p>
+<pre><code>&lt;C&gt;RegisterFingerprint&lt;/C&gt;         register a new fingerprint
+&lt;C&gt;RegisterOneFp=xxx&lt;/C&gt;            register into a specific slot
+&lt;C&gt;CompareFingerprint&lt;/C&gt;           compare against stored fingerprints
+&lt;C&gt;CheckRegisteredNo&lt;/C&gt;            number of fingerprints registered
+&lt;C&gt;ClearOneFp=xxx&lt;/C&gt;               delete one fingerprint
+&lt;C&gt;UnlockComparePWD=sss&lt;/C&gt;         unlock via password instead
+&lt;C&gt;SetPWD=sss&lt;/C&gt; / &lt;C&gt;ClearPWD&lt;/C&gt;  set or clear that password
+&lt;C&gt;UnlockTimeout=d&lt;/C&gt;              configure unlock timeout</code></pre>
+          <p>
+            (that notes file has a stray missing bracket on one of the lines, which feels about right for a first
+            pass at documenting a protocol.)
+          </p>
+          <p>
+            Registering a fingerprint, counting registered fingerprints, and deleting one all exist as commands the
+            sensor understands. In <code>main.c</code> they exist too, but as commented-out functions:
+            <code>regFingerprints()</code>, <code>checknoFingerprints()</code>, and <code>deleteFingerprint()</code>
+            are written out, with a rough retry structure sketched in, and then left disabled. The menu that is
+            supposed to call them, <code>fingerprintsOptions()</code>, prints its three options and reads a
+            selection, but each case in the switch statement is empty besides the commented-out call it was meant
+            to make.
+          </p>
+          <div class="post-callout">
+            Device capability and application functionality are not the same thing. The sensor could register and
+            delete fingerprints. The firmware, as it stands, could not.
+          </div>
+
+          <h2>Authentication before control</h2>
+          <p>The intended shape of the whole system was:</p>
+<pre><code>Unauthorized state
+        |
+        v
+Fingerprint authentication
+        |
+        v
+Authorized state
+        |
+        v
+Alarm / fingerprint administration</code></pre>
+          <p>
+            Once authenticated, the menu offers <em>Turn Alarm ON</em>, <em>Turn Alarm OFF</em>, and
+            <em>Fingerprints Options</em>. It is worth being precise about what those first two options actually
+            do: they print a confirmation string and nothing else. There is no GPIO write, no relay control, no
+            actuator path behind them. The menu and the intended control flow are real and present in the
+            repository. The physical alarm control is not. I'd rather say that plainly than let the menu screen
+            imply more than the firmware delivers.
+          </p>
+
+          <h2>Working with Microchip Code Configurator</h2>
+          <p>
+            The repository includes a <code>mcc_generated_files/</code> directory: device configuration, EUSART1
+            and EUSART2 drivers, interrupt management, and system initialization, all generated through Microchip
+            Code Configurator rather than hand-written register by register.
+          </p>
+<pre><code>MCC-generated hardware layer
+        |
+        v
+EUSART drivers / interrupt manager
+        |
+        v
+Application C code (main.c)
+        |
+        v
+Fingerprint protocol
+        |
+        v
+Access-control behaviour</code></pre>
+          <p>
+            The value of that generated layer is fairly ordinary but easy to underrate: I did not have to hand-set
+            every configuration bit on a PIC18F87K22 to get two EUSART peripherals talking, MCC generated that
+            initialization and driver code from the peripheral selections in the GUI, and the application code sits
+            entirely on top of it. It is a small, unglamorous example of the same layering idea that shows up
+            everywhere in software, just one level closer to silicon.
+          </p>
+
+          <h2>Blocking embedded code</h2>
+          <p>The firmware is full of lines shaped like this:</p>
+<pre><code>while (!EUSART2_is_rx_ready());</code></pre>
+          <p>
+            The CPU sits in that loop doing nothing until the fingerprint module answers. For a small prototype
+            this is about as simple as serial code gets, there is no interrupt handler to reason about, no shared
+            state, no race condition between a receive callback and the main loop. The cost is equally simple: the
+            processor cannot do anything else while it waits, and if the sensor never answers, the program is stuck
+            there indefinitely. I would not call this a mistake so much as a common first shape for embedded code,
+            the one you write before you have a reason to write the other kind.
+          </p>
+
+          <h2>What I would change today</h2>
+          <p>
+            None of this is a rewrite of the historical code, the repository stays as it is. But looking at it now,
+            a few things would change.
+          </p>
+          <p>
+            I would model the application as an explicit state machine instead of a sequence of blocking calls:
+          </p>
+<pre><code>IDLE
+  -> WAITING_FOR_AUTH
+  -> WAITING_FOR_SENSOR
+  -> AUTHORIZED
+  or REJECTED</code></pre>
+          <p>
+            I would replace indefinite blocking waits with interrupt-driven UART reception into ring buffers, and
+            give every peripheral operation an explicit timeout instead of a <code>while(!ready);</code> that never
+            gives up. And I would stop embedding raw protocol strings in application code and put the fingerprint
+            protocol behind a small driver interface:
+          </p>
+<pre><code>fingerprint_compare()
+fingerprint_register()
+fingerprint_delete()
+fingerprint_count()</code></pre>
+          <p>
+            with a real parser behind it for <code>&lt;C&gt;...&lt;/C&gt;</code> and
+            <code>&lt;R&gt;...&lt;/R&gt;</code>, one that checks buffer bounds, handles a malformed response instead
+            of assuming well-formed input, and returns a clear status code rather than a raw string to compare
+            against. The whole thing would separate more cleanly into layers:
+          </p>
+<pre><code>app/
+    access_control.c
+    alarm.c
+
+drivers/
+    fingerprint.c
+    fingerprint.h
+
+protocol/
+    fingerprint_protocol.c
+
+platform/
+    uart.c</code></pre>
+          <p>
+            And I would be more honest, in the design itself, about how far this is from real access-control
+            security. A serious version would need to think about sensor trust, spoofing, how and where biometric
+            templates are stored, privilege boundaries between authentication and administration commands, physical
+            tampering, and what the system does when it fails, not just when it succeeds. None of that is
+            implemented here, and I would not want to imply otherwise by staying quiet about it.
+          </p>
+
+          <h2>Looking back</h2>
+          <p>
+            The point of this project is not that an old embedded prototype is somehow more advanced than my
+            current work. It is that it exercised a different layer of engineering entirely. Modern AI systems are
+            built behind increasingly powerful abstractions: a framework handles the batching, a library handles
+            the retries, an API handles the network. In this project there were very few abstractions left. A
+            command was a string of bytes I built by hand. A response meant checking a receive buffer myself. A
+            sensor that did not answer could stop the entire program. That makes ideas like protocols, timeouts,
+            state machines, and retries very hard to treat as abstract, because at this level they are the whole
+            job.
+          </p>
+          <p>
+            The scale is completely different now, message protocols between services instead of between a
+            microcontroller and a sensor, unreliable components that are cloud APIs instead of UART lines, retries
+            and timeouts and graceful failure at the level of a distributed system instead of a single board. But
+            the engineering questions underneath, what happens when the other side does not answer, how do you know
+            a response actually means what you think it means, are the same questions, just asked at a different
+            layer.
+          </p>
+
+          <h2>Technical overview</h2>
+          <div class="table-scroll">
+            <table>
+              <tbody>
+                <tr><td>Domain</td><td>Embedded systems / biometric access control</td></tr>
+                <tr><td>Microcontroller</td><td>Microchip PIC18F87K22</td></tr>
+                <tr><td>Language</td><td>C (XC8)</td></tr>
+                <tr><td>IDE / toolchain</td><td>MPLAB X</td></tr>
+                <tr><td>Peripheral config</td><td>Microchip Code Configurator</td></tr>
+                <tr><td>Communication</td><td>Dual UART / EUSART (EUSART1, EUSART2)</td></tr>
+                <tr><td>Sensor protocol</td><td>Tagged text commands, &lt;C&gt;...&lt;/C&gt; / &lt;R&gt;...&lt;/R&gt;</td></tr>
+                <tr><td>Implemented</td><td>Fingerprint comparison, attempt-limited retry, menu navigation</td></tr>
+                <tr><td>Incomplete</td><td>Fingerprint registration/deletion, alarm actuator control</td></tr>
+                <tr><td>I/O model</td><td>Blocking (polled) serial reads</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Repository</h2>
+          <p>
+            This is not the cleanest or most sophisticated repository on my GitHub, and that is exactly why I
+            wanted to keep it. It captures an earlier stage of my engineering work, where the problem was not model
+            accuracy or inference latency, but whether the right bytes would arrive from a physical device at all.
+            A lot changed after that. The usefulness of understanding the layers underneath the software did not.
+          </p>
+          <p>
+            <a href="https://github.com/DragomirBozoki/smarthouse1.X" target="_blank" rel="noreferrer">View source on GitHub &rarr;</a>
+          </p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="/posts/books-that-can-make-you-a-better-ai-engineer/">Previous: Books That Can make you a Better AI Engineer</a>
+          <a class="button button-primary" href="/blog/">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>
