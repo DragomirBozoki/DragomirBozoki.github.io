@@ -25,6 +25,18 @@ window.POSTS = [
       "A custom generator, discriminator, and adversarial training loop learning the anatomy of chest radiographs, with EMA fine-tuning at 512x512 resolution.",
   },
   {
+    title: "Reading Speech Without Audio",
+    excerpt:
+      "Building an end-to-end visual speech recognition system: face and lip landmark extraction, a 3D CNN plus Bidirectional GRU network, and CTC decoding, trained on the GRID corpus.",
+    href: "/posts/reading-speech-without-audio/",
+    dateLabel: "June 16, 2026",
+    publishedAt: "2026-06-16",
+    tags: ["Computer Vision", "Deep Learning", "TensorFlow"],
+    archiveTitle: "Reading Speech Without Audio",
+    archiveExcerpt:
+      "A Bachelor thesis project on visual speech recognition: computer vision preprocessing, 3D CNNs, bidirectional GRUs, and CTC decoding, with honest results on speaker generalization.",
+  },
+  {
     title: "Predicting ARKit-52 Blendshapes from Audio",
     excerpt:
       "How an ensemble, a learned face refiner, and a deterministic blink module took us to second place at the AI-SPEAK 2026 competition.",

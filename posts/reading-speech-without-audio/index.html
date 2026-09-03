@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reading Speech Without Audio - Dragomir Bo&#382;oki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="/">Dragomir Bo&#382;oki</a>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a class="active" href="/blog/">Writing</a></li>
+          <li><a href="/#experience">Experience</a></li>
+          <li><a href="/#education">Education</a></li>
+          <li><a href="/#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="/blog/">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>June 16, 2026</span>
+          <span class="meta-dot">.</span>
+          <span>17 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">Computer Vision</a>
+          <a href="#">Deep Learning</a>
+          <a href="#">TensorFlow</a>
+        </div>
+
+        <h1 class="post-title">Reading Speech Without Audio</h1>
+        <p class="post-subtitle">Building an end-to-end visual speech recognition system with computer vision, 3D CNNs, recurrent networks, and CTC decoding.</p>
+
+        <p class="post-nav"><a href="https://github.com/DragomirBozoki/lipreading-cv-nlp" target="_blank" rel="noreferrer">View source on GitHub &rarr;</a></p>
+
+        <div class="post-body">
+          <p>
+            Traditional speech recognition starts with a microphone. This project started with a camera. It was
+            my Bachelor thesis in Biomedical Engineering, and the goal was to reconstruct spoken sentences using
+            only the visual information contained in a speaker's lip movements. No audio, at any point, in
+            training or inference.
+          </p>
+          <p>
+            Lipreading looks simple when humans do it badly, guessing at a word or two from context. For a neural
+            network the problem is more structured than that, and also less forgiving. The model receives a
+            sequence of images and has to produce a sequence of characters. There is no label saying which frame
+            corresponds to which letter, and different phonemes can produce nearly identical mouth shapes. Sounds
+            such as <code>/p/</code>, <code>/b/</code>, and <code>/m/</code> all close the lips the same way. The
+            information that tells them apart is mostly in the audio, not the video.
+          </p>
+          <p>
+            So the project is really three problems stacked on top of each other: extracting the visual
+            information that actually matters from a video frame, modelling how that information changes over
+            time, and converting a sequence of visual features into text without ever being told which frame maps
+            to which character. Each of those problems pulls in a different part of the architecture.
+          </p>
+
+          <h2>System overview</h2>
+          <p>
+            At a high level, a video clip moves through a fixed pipeline before it ever reaches the network's
+            first weight:
+          </p>
+
+<pre><code>Video
+  -> Frame extraction
+  -> Face detection
+  -> Facial landmarks
+  -> Lip ROI extraction
+  -> 64x64 grayscale sequence
+  -> 3D CNN
+  -> Bidirectional GRU
+  -> Character probabilities
+  -> CTC decoding
+  -> Predicted sentence</code></pre>
+
+          <p>
+            The first half of that pipeline is classical computer vision. The second half is the neural network.
+            Neither half works without the other: feed the raw frame into the 3D CNN and it spends its capacity
+            on background and lighting instead of lip shape, and feed a clean mouth crop into a model with no
+            temporal structure and it loses the motion that lipreading actually depends on.
+          </p>
+
+          <h2>Dataset</h2>
+          <p>
+            Training data comes from the <strong>GRID audiovisual sentence corpus</strong>: 34 speakers, 1,000
+            utterances each, all following a fixed sentence grammar:
+          </p>
+
+<pre><code>command + color + preposition + letter + digit + adverb</code></pre>
+
+          <p>
+            which produces sentences such as <em>"place red at C two now."</em> Every recording is accompanied
+            by a word-level alignment file, so the video and the transcript line up exactly. That fixed grammar
+            is what makes GRID usable for a project like this. It is also, honestly, one of the project's built-in
+            limitations: the vocabulary is small and the grammar never varies, which is a long way from
+            unconstrained natural speech. I come back to that in the limitations section.
+          </p>
+
+          <figure class="post-media">
+            <img src="/images/lipreading/person.png" alt="Raw video frame of a GRID corpus speaker before any processing" loading="lazy" />
+            <figcaption>A raw frame from the GRID corpus (speaker s1). Nothing here is cropped, cropped to grayscale, or resized yet, this is exactly what the camera recorded.</figcaption>
+          </figure>
+
+          <p>
+            The GitHub repository's data pipeline is built to pool clips from twenty of GRID's speakers into one
+            training set. The quantitative results later in this post, however, come from an earlier and narrower
+            experiment: a model trained on a single speaker (s1), using the first 500 of their recordings, 450 for
+            training and 50 held out for testing. I kept that distinction explicit throughout the post rather than
+            blurring the two together.
+          </p>
+
+          <h2>Computer vision preprocessing</h2>
+          <p>
+            Raw video never touches the network directly. Every frame goes through the same sequence of steps,
+            implemented with OpenCV and dlib:
+          </p>
+          <ol>
+            <li>detect the face in the frame;</li>
+            <li>estimate 68 facial landmark points;</li>
+            <li>locate the mouth corners and top/bottom lip edges from four of those points;</li>
+            <li>crop the region between them;</li>
+            <li>resize the crop to 64 &times; 64;</li>
+            <li>convert it to grayscale;</li>
+            <li>normalize it against that clip's own pixel statistics;</li>
+            <li>append it to the frame sequence in order.</li>
+          </ol>
+          <p>
+            The mouth crop specifically comes from landmark points 48 and 54 for the left and right corners of the
+            lips, and points 50/51 and 58/59 for the top and bottom edges. That is a deliberately small, cheap
+            piece of geometry, not a learned detector, and it is enough to isolate the region that matters.
+          </p>
+          <p>
+            Isolating the mouth like this matters because the network's capacity is limited and every parameter
+            spent modelling something irrelevant is a parameter not spent modelling lip movement. Without this
+            step the network would also have to learn to ignore:
+          </p>
+          <ul>
+            <li>background</li>
+            <li>clothing</li>
+            <li>hair</li>
+            <li>most of the rest of the face</li>
+            <li>head and camera motion</li>
+          </ul>
+          <p>
+            Cropping to the mouth region removes all of that before the network ever sees a pixel. Grayscale
+            conversion happens for a similar reason: color carries very little information about what someone is
+            saying compared to lip geometry, opening, and motion, and dropping two of three channels cuts the
+            input size for free.
+          </p>
+          <p>Here is the core of that crop, simplified slightly from <code>preprocessing.py</code>:</p>
+
+<pre><code>faces = detector(gray_frame)
+for face in faces:
+    landmarks = predictor(gray_frame, face)
+
+    lip_left = landmarks.part(48).x
+    lip_right = landmarks.part(54).x
+    lip_top = min(landmarks.part(50).y, landmarks.part(51).y)
+    lip_bottom = max(landmarks.part(58).y, landmarks.part(59).y)
+
+    lip_frame = frame[lip_top:lip_bottom, lip_left:lip_right]
+    lip_frame_resized = cv2.resize(lip_frame, (64, 64))</code></pre>
+
+          <p>
+            One detail worth calling out: if the face detector fails on a given frame, that frame is simply
+            skipped rather than interpolated or replaced. A short run of missed detections quietly shortens the
+            sequence before it ever reaches padding. It is a small thing, but it is the kind of small thing that
+            determines whether a pipeline is robust in practice, not just on paper.
+          </p>
+          <p>
+            After cropping, each frame's own mean and standard deviation are used to normalize it, rather than a
+            fixed constant computed once over the whole dataset. That keeps the normalization adapted to each
+            clip's own lighting and contrast instead of assuming every recording looks the same.
+          </p>
+
+          <figure class="post-media">
+            <img src="/images/lipreading/lips_gray.png" alt="Normalized 64 by 64 grayscale lip region extracted from a video frame" loading="lazy" />
+            <figcaption>The same speaker's mouth region after landmark-based cropping, grayscale conversion, and resizing to 64x64. This is what the network actually sees.</figcaption>
+          </figure>
+
+          <h2>Temporal representation</h2>
+          <p>One input sample is a fixed-length sequence:</p>
+
+<pre><code>75 x 64 x 64 x 1</code></pre>
+
+          <p>
+            where 75 is the number of frames, 64 &times; 64 is the spatial resolution of each cropped mouth
+            region, and 1 is the single grayscale channel. The temporal dimension is not incidental. A single
+            static mouth frame is often ambiguous on its own: a rounded, mostly-closed mouth could be mid-word in
+            several different ways. What disambiguates it is the transition around it.
+          </p>
+
+<pre><code>closed lips
+  -> opening
+  -> rounded configuration</code></pre>
+
+          <p>
+            That three-step sequence carries far more information than any single frame in it. Keeping frames in
+            order, rather than treating them as an unordered bag of images, is what makes that motion visible to
+            the network at all.
+          </p>
+
+          <h2>Model architecture</h2>
+          <p>
+            The network combines two components with different jobs: a 3D convolutional stack that extracts
+            spatiotemporal visual features, and a pair of bidirectional recurrent layers that model how those
+            features evolve across the full sequence.
+          </p>
+
+<pre><code>75 x 64 x 64 x 1 video
+  -> Conv3D (128 filters)
+  -> MaxPool3D
+  -> Conv3D (256 filters)
+  -> MaxPool3D
+  -> Conv3D (64 filters)
+  -> MaxPool3D
+  -> TimeDistributed Flatten
+  -> Bidirectional GRU (128 units)
+  -> Bidirectional GRU (128 units)
+  -> Dense + Softmax (41 classes)
+  -> 75 x 41 probability sequence
+  -> CTC decoder
+  -> text</code></pre>
+
+          <p>
+            All three Conv3D layers use 3 &times; 3 &times; 3 kernels and ReLU activations. Pooling is applied as
+            <code>1 &times; 2 &times; 2</code>, meaning it shrinks the spatial dimensions but deliberately leaves
+            the temporal dimension untouched, since the recurrent layers downstream need that full 75-step
+            sequence intact. After the convolutional stack, a <code>TimeDistributed</code> flatten turns each
+            time step's spatial feature map into a single vector, independently, before the sequence is handed to
+            the GRUs. Both GRU layers use 128 units with orthogonal weight initialization and 0.5 dropout, and the
+            final dense layer outputs a softmax distribution over 41 character classes at every one of the 75
+            time steps.
+          </p>
+
+          <figure class="post-media">
+            <img src="/images/lipreading/neural_network.png" alt="Diagram of the input sequence flowing through spatial and temporal feature stages to an output layer" loading="lazy" />
+            <figcaption>An early architecture sketch from the thesis: the input sequence, spatial features, temporal features, and a fully connected output layer, the same shape as the network above, drawn before the implementation settled.</figcaption>
+          </figure>
+
+          <h2>Why 3D convolutions?</h2>
+          <p>
+            A standard 2D convolution learns patterns inside a single image: edges, gradients, local shapes. A 3D
+            convolution learns patterns across <strong>time &times; height &times; width</strong> at once, which
+            means it can respond directly to short movements, not just static configurations. Lips closing, a jaw
+            dropping, a mouth rounding over two or three frames, these are the kind of short transitions a 2D
+            convolution simply cannot see, because it never looks at more than one frame at a time.
+          </p>
+          <p>
+            That distinction matters here specifically because a single frame under-determines the sound being
+            produced. Two different phonemes can leave the mouth in visually identical positions. What separates
+            them is often the motion on either side of that position, and 3D convolutions are what let the network
+            pick that motion up before anything reaches the recurrent layers.
+          </p>
+
+          <h2>Why recurrent layers?</h2>
+          <p>
+            Short-range motion from the convolutional stack is still not the whole picture. A particular mouth
+            movement can be ambiguous in isolation and only resolve once you see more of the sentence around it.
+            The two Bidirectional GRU layers exist for that: each time step's representation is built from both
+            directions.
+          </p>
+
+<pre><code>past -> current frame <- future</code></pre>
+
+          <p>
+            This works specifically because the model operates on complete, already-recorded clips rather than a
+            live stream. A real-time system would only have access to the past at inference time and would need a
+            different design. Here, the whole 75-frame sequence is available before decoding starts, so there is
+            no reason not to let later frames inform earlier ones.
+          </p>
+
+          <h2>The alignment problem</h2>
+          <p>
+            Every clip has 75 video frames. Most GRID sentences have only a few dozen characters. There is no
+            ground truth saying frames 1 through 4 are the letter "p," frames 5 through 8 are "l," and so on.
+            Producing that kind of frame-level label by hand, across a dataset this size, would be impractical and
+            more or less pointless. The alignment between input length and output length has to be learned, not
+            annotated.
+          </p>
+
+          <h2>CTC decoding</h2>
+          <p>
+            This is what Connectionist Temporal Classification solves. The network predicts a character
+            distribution at every one of the 75 time steps, plus one extra option: a blank symbol that means
+            "nothing new here." A raw, conceptual model output might look like:
+          </p>
+
+<pre><code>_ _ p p _ l l _ a a _ c c e _</code></pre>
+
+          <p>Collapse the repeated characters and drop the blanks, and what is left is:</p>
+
+<pre><code>place</code></pre>
+
+          <p>
+            That collapsing rule is what lets the model be trained directly on <code>video &rarr; text</code>
+            pairs without anyone ever specifying which frame corresponds to which letter. Training uses
+            TensorFlow's <code>ctc_batch_cost</code>, which compares the predicted probability sequence against
+            the target transcript while summing over every alignment that could have produced it, not just one
+            fixed guess.
+          </p>
+
+          <h2>Training</h2>
+          <p>
+            The network is trained with the Adam optimizer at an initial learning rate of <code>1e-4</code>. A
+            custom scheduler holds that rate constant for the first 50 epochs, then, every 50-epoch cycle after
+            that, alternates between holding steady and applying an exponential decay. The full schedule in the
+            repository targets 500 epochs, with weights checkpointed after every epoch based on training loss.
+          </p>
+          <p>
+            Two callbacks made the training loop easier to trust. One decodes and prints a batch of predictions
+            against their ground truth at the end of every epoch, so I could actually read what the model thought
+            it heard, not just watch a loss number go down. A falling CTC loss tells you the model is getting more
+            confident; it does not tell you whether it is confident about the right thing. Seeing
+            <code>"place white at three soon"</code> where the target was
+            <code>"place white at d three soon"</code> is a five-second sanity check that a loss curve alone
+            cannot give you. The other callback writes the running training history to disk every few epochs, so a
+            long run surviving an interruption does not cost the whole training log.
+          </p>
+          <p>
+            The repository's data pipeline pools clips from twenty named GRID speakers into a single shuffled
+            training set, batched at 512 clips split across 8 sub-batches for multi-GPU training through
+            TensorFlow's <code>MirroredStrategy</code>. That is a different, larger configuration than the
+            single-speaker run the numbers below come from, and I do not have a directly comparable measurement
+            for it, only the design intent: reduce how specialized the model becomes to any one person's face and
+            articulation.
+          </p>
+
+          <h2>Speaker generalization</h2>
+          <p>
+            This is one of the harder parts of lipreading in general, not just in this project. Different people
+            do not just sound different, they move differently. Lip geometry, jaw shape, articulation habits,
+            speaking speed, and how much someone moves their head all vary from speaker to speaker, and none of
+            that variation is something the grammar of GRID controls for.
+          </p>
+          <p>
+            The goal of training on multiple speakers is to push the network toward representations tied to
+            speech itself rather than to any one person's mouth. Whether that goal was actually reached is a
+            measurement question, and I only have a real measurement for the narrower, single-speaker
+            configuration, which is what the next section covers honestly rather than optimistically.
+          </p>
+
+          <h2>What made this harder than expected</h2>
+
+          <h3>Viseme ambiguity</h3>
+          <p>
+            Sounds like <code>/p/</code>, <code>/b/</code>, and <code>/m/</code> can look almost identical on the
+            lips even though they sound completely different. Visually, a viseme can map to several different
+            phonemes, and no amount of clean preprocessing removes that ambiguity, since it is not a preprocessing
+            problem, it is a property of the task.
+          </p>
+
+          <h3>Missing information</h3>
+          <p>
+            Some sounds are shaped mostly by the tongue or the vocal cords and leave almost no visible trace on
+            the lips at all. Visual speech recognition is fundamentally working with partial information, not a
+            noisy version of the full signal.
+          </p>
+
+          <h3>Preprocessing dependency</h3>
+          <p>
+            The whole system is only as reliable as its face and landmark detection. If those fail on a frame, or
+            drift slightly, everything downstream, the crop, the normalization, the sequence the network trains
+            on, inherits that error. There is no recovery mechanism later in the pipeline.
+          </p>
+
+          <h3>Temporal alignment</h3>
+          <p>
+            Covered above, but worth repeating as a standalone difficulty: input and output sequences have
+            different, unrelated lengths, and that mismatch has to be handled by the loss function, not worked
+            around in preprocessing.
+          </p>
+
+          <h3>Speaker variability</h3>
+          <p>
+            The same sentence, spoken by two different people, can produce visibly different motion. A model that
+            performs well on one speaker and poorly on another has not necessarily learned less, it may simply
+            have learned something narrower than intended.
+          </p>
+
+          <h2>Results</h2>
+          <p>
+            The numbers below come from the single-speaker experiment described in the dataset section: trained
+            on speaker s1's first 450 clips for 60 epochs, then evaluated on 50 held-out clips from four
+            different speakers.
+          </p>
+
+          <div class="table-scroll">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Speaker</th>
+                  <th>WER (%)</th>
+                  <th>CER (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>S1 (trained speaker)</td>
+                  <td>12.10</td>
+                  <td>7.21</td>
+                </tr>
+                <tr>
+                  <td>S7 (unseen)</td>
+                  <td>71.04</td>
+                  <td>54.28</td>
+                </tr>
+                <tr>
+                  <td>S9 (unseen)</td>
+                  <td>68.22</td>
+                  <td>51.09</td>
+                </tr>
+                <tr>
+                  <td>S11 (unseen)</td>
+                  <td>74.68</td>
+                  <td>58.01</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            On the speaker it was trained on, the model held a word error rate around 12% and a character error
+            rate around 7%, respectable for a from-scratch architecture on a constrained grammar. On speakers it
+            had never seen, word error rate jumped past 68% across the board. That gap is the single clearest
+            result in the whole project, and it is not subtle.
+          </p>
+          <p>
+            The most common failure mode was dropping alveolar consonants, sounds like <code>/d/</code>,
+            <code>/n/</code>, <code>/t/</code>, <code>/s/</code>, and <code>/l/</code>, that are visually close to
+            each other because they all involve contact between the tongue and the ridge behind the upper teeth,
+            which the camera cannot see. Two representative examples from the unseen-speaker test set:
+          </p>
+          <div class="post-callout">
+            target: <em>"lay blue at d six now"</em> &rarr; predicted: <em>"lay blue at six now"</em><br />
+            target: <em>"place white at d three soon"</em> &rarr; predicted: <em>"place white at three soon"</em>
+          </div>
+          <p>
+            In both cases the model dropped the letter entirely rather than substituting a wrong one, which fits
+            with alveolar consonants being close to invisible from the lips. I'd attribute the generalization gap
+            to two compounding causes rather than one: 60 epochs is a short training run for this architecture,
+            and 450 clips from a single speaker is a narrow basis for learning anything speaker-independent. Both
+            are addressable with more compute and more data. Neither is addressable by tuning the model further on
+            the same 450 clips.
+          </p>
+
+          <h2>Limitations</h2>
+          <ul>
+            <li>GRID uses a fixed, constrained grammar. Unrestricted natural speech is a considerably harder problem than anything measured here.</li>
+            <li>GRID recordings are controlled: consistent lighting, a fixed camera position, a plain background. Real-world video is messier on every one of those axes.</li>
+            <li>The system depends entirely on reliable face and mouth detection. Large head rotation or occlusion degrades everything downstream of it.</li>
+            <li>Visual information alone cannot uniquely determine every phoneme. Some of what distinguishes spoken words is simply not visible on the lips.</li>
+            <li>The architecture predates modern large-scale visual speech systems and is far smaller than what current published work uses.</li>
+            <li>This is a research prototype from a Bachelor thesis, not a production speech recognition system, and I would not describe it as one.</li>
+          </ul>
+
+          <h2>What I would do differently today</h2>
+          <p>
+            The recurrent layers here are a reasonable choice for a first implementation, but I would want to
+            compare them against a Transformer or Conformer sequence encoder today. Self-attention can model
+            longer-range dependencies more directly than a GRU has to, one recurrent step at a time, and
+            Conformers in particular were built specifically for combining local and global structure in speech.
+          </p>
+          <p>
+            I would also look at stronger visual encoders than three plain Conv3D blocks, and at pairing CTC
+            decoding with an external language model, since a language model can rule out visually plausible but
+            linguistically nonsensical decodings the acoustic side of the system has no way to reject on its own.
+          </p>
+          <p>
+            Beyond the architecture, the more interesting extension is audio-visual fusion: instead of
+            <code>video &rarr; text</code>, a model that takes both <code>audio + video &rarr; text</code> and
+            leans on whichever modality is more reliable at a given moment. That is closer to how the visual
+            channel is actually useful in practice, as a backup signal for noisy audio rather than a full
+            replacement for it. And a real deployment would need real-time inference: face tracking instead of
+            per-frame detection, a rolling buffer instead of a fixed 75-frame clip, streaming decoding, and enough
+            latency optimization to run on something like an embedded Jetson rather than a training workstation.
+          </p>
+
+          <h2>What I learned</h2>
+          <p>
+            The clearest thing this project taught me is that visual speech recognition is not image classification
+            wearing a trench coat. Useful information here exists at several different levels at once: raw pixels,
+            facial geometry, short-term motion, longer sequence context, and finally the alignment between that
+            sequence and actual characters. None of those levels is optional, and the hard part of the project was
+            never any one of them individually, it was connecting all of them into one pipeline that trains end to
+            end.
+          </p>
+          <p>
+            Doing that connected computer vision, deep learning, sequence modelling, and a bit of NLP into a single
+            working system, and doing it myself, end to end, taught me more about where systems like this actually
+            break than reading about any one of those pieces in isolation ever did.
+          </p>
+
+          <h2>Technical overview</h2>
+          <div class="table-scroll">
+            <table>
+              <tbody>
+                <tr><td>Task</td><td>Visual speech recognition</td></tr>
+                <tr><td>Context</td><td>Bachelor thesis, Biomedical Engineering</td></tr>
+                <tr><td>Input</td><td>75-frame grayscale lip sequence</td></tr>
+                <tr><td>Frame size</td><td>64 &times; 64, 1 channel</td></tr>
+                <tr><td>Visual encoder</td><td>3D CNN (128 &rarr; 256 &rarr; 64 filters, 3x3x3 kernels)</td></tr>
+                <tr><td>Sequence model</td><td>2 &times; Bidirectional GRU, 128 units</td></tr>
+                <tr><td>Vocabulary</td><td>41 output classes</td></tr>
+                <tr><td>Decoder / loss</td><td>CTC (ctc_batch_cost)</td></tr>
+                <tr><td>Optimizer</td><td>Adam, initial LR 1e-4</td></tr>
+                <tr><td>Framework</td><td>TensorFlow / Keras</td></tr>
+                <tr><td>Computer vision</td><td>OpenCV / dlib</td></tr>
+                <tr><td>Dataset</td><td>GRID corpus</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Repository</h2>
+          <p>
+            The full implementation, including preprocessing, the data pipeline, model definition, training loop,
+            and the original thesis document, is available on GitHub:
+            <a href="https://github.com/DragomirBozoki/lipreading-cv-nlp" target="_blank" rel="noreferrer">DragomirBozoki/lipreading-cv-nlp</a>.
+          </p>
+
+          <p>
+            The project started as an attempt to recognize words from moving lips, but the more useful outcome was
+            learning how spatial perception, temporal modelling, and language decoding have to work together
+            before a video can become text.
+          </p>
+
+          <p><a href="https://github.com/DragomirBozoki/lipreading-cv-nlp" target="_blank" rel="noreferrer">View source on GitHub &rarr;</a></p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="/posts/ai-speak-blendshape-prediction/">Next: Predicting ARKit-52 Blendshapes from Audio</a>
+          <a class="button button-primary" href="/blog/">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>
