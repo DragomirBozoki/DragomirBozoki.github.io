@@ -1,30 +1,9 @@
 /* ─────────────────────────────────────────────────────────
    Cozy collectible game (index.html only)
-   Isolated stylesheet. Relies on the site's existing custom
-   properties (--bg, --text, --muted, --rule, --soft, --accent,
-   --radius, --font-ui, --font-mono, --font-text) for everything
-   except the five collectible-border hues below, which follow
-   the same light/dark override pattern styles.css already uses
-   for --accent.
+   Isolated stylesheet. Every color comes from the tokens in
+   styles.css :root (including the --item-* collectible hues),
+   along with --radius and the --font-* stacks.
    ───────────────────────────────────────────────────────── */
-
-:root {
-  --item-orange: #c0420f; /* same hue as the site accent */
-  --item-purple: #7a5aa8;
-  --item-blue: #3b6ea5;
-  --item-red: #b23a3a;
-  --item-green: #4f7a52;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --item-orange: #e8804c;
-    --item-purple: #a98fd6;
-    --item-blue: #6ea3d9;
-    --item-red: #d9736f;
-    --item-green: #7fae82;
-  }
-}
 
 /* Entry point: a quiet trigger next to the wordmark on narrow
    and medium screens, where there's no real margin to spare. */
@@ -45,12 +24,12 @@
   letter-spacing: 0.03em;
   color: var(--accent);
   cursor: pointer;
-  transition: opacity 150ms ease;
+  transition: color 150ms ease;
 }
 
 .game-trigger:hover,
 .game-trigger:focus-visible {
-  opacity: 0.75;
+  color: var(--accent-hover);
 }
 
 /* On wide viewports there's real margin to the left of the page
@@ -77,12 +56,14 @@
   font-size: 0.72rem;
   letter-spacing: 0.05em;
   cursor: pointer;
-  transition: opacity 150ms ease, transform 150ms ease;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease, transform 150ms ease;
 }
 
 .game-trigger-box:hover,
 .game-trigger-box:focus-visible {
-  opacity: 0.75;
+  color: var(--accent-hover);
+  border-color: var(--accent-hover);
+  background: var(--accent-soft);
   transform: translateY(-1px);
 }
 
@@ -124,7 +105,7 @@ body.game-scroll-lock {
 .game-overlay {
   position: fixed;
   inset: 0;
-  background: var(--soft);
+  background: var(--surface-2);
   opacity: 0.62;
 }
 
@@ -147,11 +128,11 @@ body.game-scroll-lock {
   gap: 1rem;
   padding: 0.85rem 1.1rem;
   background: var(--bg);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   letter-spacing: 0.03em;
-  color: var(--muted);
+  color: var(--text-muted);
   user-select: none;
 }
 
@@ -166,14 +147,14 @@ body.game-scroll-lock {
 }
 
 .game-exit {
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   background: var(--bg);
   border-radius: var(--radius);
   padding: 0.35rem 0.65rem;
   font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.03em;
-  color: var(--muted);
+  color: var(--text-muted);
   cursor: pointer;
   transition: color 150ms ease, border-color 150ms ease;
 }
@@ -192,7 +173,7 @@ body.game-scroll-lock {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1.5px solid var(--rule);
+  border: 1.5px solid var(--border);
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
@@ -236,7 +217,7 @@ body.game-scroll-lock {
 
 .game-item--rare {
   border-color: var(--accent);
-  box-shadow: 0 0 14px 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 14px 1px var(--accent-glow);
 }
 
 .game-item--falling {
@@ -358,12 +339,12 @@ body.game-scroll-lock {
 
 .game-result-card {
   width: min(360px, 100%);
-  background: var(--bg);
-  border: 1px solid var(--rule);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.75rem 1.5rem;
   text-align: center;
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 20px 45px var(--shadow);
   user-select: none;
 }
 
@@ -385,7 +366,7 @@ body.game-scroll-lock {
 .game-result-msg {
   font-family: var(--font-ui);
   font-size: 0.85rem;
-  color: var(--muted);
+  color: var(--text-muted);
   font-style: italic;
   margin: 0 0 1rem;
 }
@@ -394,7 +375,7 @@ body.game-scroll-lock {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   letter-spacing: 0.03em;
-  color: var(--muted);
+  color: var(--text-muted);
   margin: 0 0 1.4rem;
 }
 
@@ -420,7 +401,7 @@ body.game-scroll-lock {
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
   transition: border-color 150ms ease, background 150ms ease, color 150ms ease, transform 150ms ease;
@@ -436,14 +417,15 @@ body.game-scroll-lock {
 .game-btn-primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .game-btn-primary:hover,
-.game-btn-primary:focus-visible {
-  background: var(--accent);
-  color: #fff;
-  opacity: 0.9;
+.game-btn-primary:focus-visible,
+.game-btn-primary:active {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--on-accent);
   transform: translateY(-1px);
 }
 
