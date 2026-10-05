@@ -1047,6 +1047,65 @@ img {
   font-style: italic;
 }
 
+/* Inline SVG diagrams: shapes and text pull from the color tokens so
+   they follow the light/dark scheme like the rest of the page. */
+.post-diagram {
+  max-width: 520px;
+}
+
+.post-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.post-diagram .dg-box {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.post-diagram .dg-box-accent {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+}
+
+.post-diagram .dg-title {
+  fill: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.post-diagram .dg-sub {
+  fill: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.post-diagram .dg-line {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.5;
+}
+
+.post-diagram .dg-line-accent {
+  stroke: var(--accent);
+}
+
+.post-diagram .dg-dashed {
+  stroke-dasharray: 4 3;
+}
+
+.post-diagram .dg-arrowhead {
+  fill: var(--text-muted);
+}
+
+.post-diagram .dg-arrowhead-accent {
+  fill: var(--accent);
+}
+
 .post-footer {
   margin-top: 4rem;
   padding-top: 1.4rem;

@@ -1,5 +1,17 @@
 window.POSTS = [
   {
+    title: "Master's Thesis Defended at FTN: Teaching Kalliope to Understand Paraphrases",
+    excerpt:
+      "My M.Sc. thesis: a multilingual hybrid NLP module that lets the Kalliope voice assistant act on English and Greek commands it was never given word for word.",
+    href: "/posts/masters-thesis-kalliope-intent-understanding/",
+    dateLabel: "October 5, 2026",
+    publishedAt: "2026-10-05",
+    tags: ["NLP", "Transformers", "FAISS", "Voice Assistants"],
+    archiveTitle: "Master's Thesis Defended at FTN: Teaching Kalliope to Understand Paraphrases",
+    archiveExcerpt:
+      "A transformer intent classifier with FAISS retrieval and generative fallbacks: the classifier carries the system, and the weaker fallbacks are only allowed to talk, never act.",
+  },
+  {
     title: "Building a Multimodal AI Platform for Humanoid Robots",
     excerpt:
       "What began as a voice agent for one robot turned into a shared platform for voice, vision, identity, gesture, and teleoperation, running across the AgiBot X2 Ultra and A2 Ultra.",

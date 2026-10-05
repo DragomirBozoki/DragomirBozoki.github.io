@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f6f8fa" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0b1016" media="(prefers-color-scheme: dark)" />
+  <title>Master's Thesis Defended at FTN: Teaching Kalliope to Understand Paraphrases - Dragomir Bo&#382;oki</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-nav">
+      <div class="container nav-inner">
+        <a class="brand" href="/">Dragomir Bo&#382;oki</a>
+        <ul class="nav-links">
+          <li><a href="/">Home</a></li>
+          <li><a class="active" href="/blog/">Writing</a></li>
+          <li><a href="/#experience">Experience</a></li>
+          <li><a href="/#education">Education</a></li>
+          <li><a href="/#contact">Contact</a></li>
+        </ul>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <article class="post-layout">
+        <p class="post-nav"><a href="/blog/">&larr; Back to all posts</a></p>
+
+        <div class="post-meta">
+          <span>October 5, 2026</span>
+          <span class="meta-dot">.</span>
+          <span>10 min read</span>
+          <span class="meta-dot">.</span>
+          <a href="#">NLP</a>
+          <a href="#">Transformers</a>
+          <a href="#">FAISS</a>
+          <a href="#">Voice Assistants</a>
+        </div>
+
+        <h1 class="post-title">Master's Thesis Defended at FTN: Teaching Kalliope to Understand Paraphrases</h1>
+        <p class="post-subtitle">A multilingual hybrid NLP module that lets an open-source voice assistant act on English and Greek commands it was never given word for word.</p>
+
+        <p class="post-nav"><a href="https://github.com/DragomirBozoki/kalliope-dual-llm-chatbot" target="_blank" rel="noreferrer">View source on GitHub &rarr;</a></p>
+
+        <div class="post-body">
+          <p>
+            This year I defended my M.Sc. thesis at the Faculty of Technical Sciences (FTN), University of Novi
+            Sad. The full title is a mouthful: <em>Multilingual Hybrid NLP Module for Semantic Intent Understanding
+            in the Kalliope Voice Assistant</em>. The idea behind it is short. A voice assistant should react to
+            what you mean, not to the exact words you happened to use.
+          </p>
+          <p>
+            The work started during my Erasmus+ exchange at the University of the Peloponnese. ESDA Lab in Patras
+            uses Kalliope, an open-source Python voice assistant, to control lights, fans, web radio, ambient sound
+            and a handful of lab-specific actions. It worked well as long as people said things the way someone had
+            written them into its configuration. My job was to make it understand everything else, in English and
+            in Greek.
+          </p>
+
+          <div class="post-callout">
+            01 &middot; Intent classifier: a fine-tuned transformer maps a sentence to a Kalliope synapse.<br />
+            02 &middot; Retrieval fallback: FAISS finds the closest known question when the classifier is unsure.<br />
+            03 &middot; Generative fallback: mT5-small answers queries that are outside the intent set.<br />
+            04 &middot; Final classifier (XLM-RoBERTa): 97.1% accuracy, 0.967 macro-F1.
+          </div>
+
+          <h2>Where phrase matching breaks</h2>
+          <p>
+            Kalliope's configuration, the "brain", is a YAML file of <strong>synapses</strong>. Each synapse has
+            signals that trigger it and neurons that do the work: say something, run a shell command, call an API.
+            The most common signal is an <strong>order</strong>, a phrase you expect the user to say. The default
+            matching rule, in Kalliope's own documentation, is that a synapse fires if all words of the order are
+            present in the spoken sentence. Stricter variants also forbid extra words or require the same word order.
+          </p>
+          <p>
+            That is easy to reason about, and it falls apart as soon as real people talk to it. Suppose the order
+            for the kitchen synapse is written as <code>turn on the kitchen lights</code>. These are all real
+            training sentences for that same intent from my dataset:
+          </p>
+<pre><code>Brighten up the kitchen area.
+Kitchen illumination needed, please.
+Let there be light in the kitchen!
+Άναψε τα φώτα στην κουζίνα.</code></pre>
+          <p>
+            None of them contains all the words of the order. The last one shares no words with it at all, because
+            it is Greek. To cover them with phrase matching, someone has to anticipate every phrasing and write it
+            down, once per language. The documentation also warns that if one order is contained in another, both
+            synapses fire, so adding more orders makes collisions more likely.
+          </p>
+          <p>
+            The fix I went for is to stop matching words and start classifying meaning. A model reads the sentence
+            and outputs the name of the synapse it belongs to. Kalliope then runs that synapse directly. The brain
+            file stays the same; only the decision of which synapse to run moves into a model.
+          </p>
+
+          <h2>The hybrid design</h2>
+          <p>
+            A single classifier is not enough on its own, because people also ask things that are not commands at
+            all. So the module has three paths, and the confidence of the classifier decides which one a sentence
+            takes.
+          </p>
+
+          <figure class="post-media post-diagram">
+            <svg viewBox="0 0 360 358" role="img" aria-labelledby="dg-title dg-desc">
+              <title id="dg-title">Hybrid intent pipeline</title>
+              <desc id="dg-desc">Transcribed text goes to the intent classifier, then a confidence gate. A confident intent runs a Kalliope synapse. Low confidence goes to FAISS retrieval, which speaks a retrieved answer. Queries outside the intent set go to mT5-small, which speaks a generated reply.</desc>
+              <defs>
+                <marker id="dg-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path class="dg-arrowhead" d="M0,0 L10,5 L0,10 z" />
+                </marker>
+                <marker id="dg-arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path class="dg-arrowhead-accent" d="M0,0 L10,5 L0,10 z" />
+                </marker>
+              </defs>
+
+              <rect class="dg-box" x="80" y="1" width="200" height="44" rx="6" />
+              <text class="dg-title" x="180" y="20" text-anchor="middle">Spoken command</text>
+              <text class="dg-sub" x="180" y="36" text-anchor="middle">transcribed by Kalliope</text>
+
+              <line class="dg-line dg-line-accent" x1="180" y1="45" x2="180" y2="66" marker-end="url(#dg-arrow-accent)" />
+
+              <rect class="dg-box dg-box-accent" x="80" y="68" width="200" height="44" rx="6" />
+              <text class="dg-title" x="180" y="87" text-anchor="middle">Intent classifier</text>
+              <text class="dg-sub" x="180" y="103" text-anchor="middle">XLM-RoBERTa</text>
+
+              <line class="dg-line dg-line-accent" x1="180" y1="112" x2="180" y2="133" marker-end="url(#dg-arrow-accent)" />
+
+              <rect class="dg-box" x="80" y="135" width="200" height="44" rx="6" />
+              <text class="dg-title" x="180" y="154" text-anchor="middle">Confidence gate</text>
+              <text class="dg-sub" x="180" y="170" text-anchor="middle">which path?</text>
+
+              <path class="dg-line dg-line-accent" d="M180,179 V196 H55 V224" marker-end="url(#dg-arrow-accent)" />
+              <path class="dg-line dg-dashed" d="M180,196 V224" marker-end="url(#dg-arrow)" />
+              <path class="dg-line dg-dashed" d="M180,196 H305 V224" marker-end="url(#dg-arrow)" />
+
+              <rect class="dg-box dg-box-accent" x="1" y="226" width="108" height="56" rx="6" />
+              <text class="dg-sub" x="55" y="246" text-anchor="middle">confident intent</text>
+              <text class="dg-title" x="55" y="264" text-anchor="middle">Run synapse</text>
+
+              <rect class="dg-box" x="126" y="226" width="108" height="56" rx="6" />
+              <text class="dg-sub" x="180" y="246" text-anchor="middle">low confidence</text>
+              <text class="dg-title" x="180" y="264" text-anchor="middle">FAISS lookup</text>
+
+              <rect class="dg-box" x="251" y="226" width="108" height="56" rx="6" />
+              <text class="dg-sub" x="305" y="246" text-anchor="middle">outside intent set</text>
+              <text class="dg-title" x="305" y="264" text-anchor="middle">mT5-small</text>
+
+              <line class="dg-line dg-line-accent" x1="55" y1="282" x2="55" y2="308" marker-end="url(#dg-arrow-accent)" />
+              <line class="dg-line dg-dashed" x1="180" y1="282" x2="180" y2="308" marker-end="url(#dg-arrow)" />
+              <line class="dg-line dg-dashed" x1="305" y1="282" x2="305" y2="308" marker-end="url(#dg-arrow)" />
+
+              <rect class="dg-box" x="1" y="310" width="108" height="46" rx="6" />
+              <text class="dg-title" x="55" y="332" text-anchor="middle">Acts</text>
+              <text class="dg-sub" x="55" y="347" text-anchor="middle">lights, radio, fan</text>
+
+              <rect class="dg-box" x="126" y="310" width="108" height="46" rx="6" />
+              <text class="dg-title" x="180" y="332" text-anchor="middle">Speaks</text>
+              <text class="dg-sub" x="180" y="347" text-anchor="middle">retrieved answer</text>
+
+              <rect class="dg-box" x="251" y="310" width="108" height="46" rx="6" />
+              <text class="dg-title" x="305" y="332" text-anchor="middle">Speaks</text>
+              <text class="dg-sub" x="305" y="347" text-anchor="middle">generated reply</text>
+            </svg>
+            <figcaption>The three paths. Only the solid path can trigger an action; both fallbacks (dashed) can only talk.</figcaption>
+          </figure>
+
+          <p>
+            <strong>The intent classifier</strong> is a fine-tuned transformer that maps a sentence to one of the
+            lab's intents. Every intent label is the name of a Kalliope synapse, such as <code>kitchen-on</code>,
+            <code>fan-lab1</code> or <code>run-web-radio</code>. In the repository the gate sits at a softmax
+            probability of 0.9: above it, the label goes straight to Kalliope.
+          </p>
+          <p>
+            <strong>The FAISS fallback</strong> handles sentences the classifier is unsure about. The sentence is
+            embedded with <code>paraphrase-multilingual-MiniLM-L12-v2</code> and compared against a small set of
+            question and answer pairs about ESDA Lab. The answer stored with the closest question is spoken back.
+          </p>
+          <p>
+            <strong>The generative fallback</strong> is for queries that are outside the intent set entirely: small
+            talk, questions about the assistant itself. The label map has a dedicated <code>generative</code> class
+            for this, trained on sentences like <em>"What can you do?"</em> and <em>"Who built you?"</em>, so the
+            classifier itself learns to say "this is not a command". In the final thesis system those queries go to
+            mT5-small.
+          </p>
+          <p>
+            The most important design decision is the one in the caption. Turning off the lights in a lab where
+            someone is working is a worse failure than saying something unhelpful. So only the classifier, the part I
+            could measure and trust, is allowed to run actions. Both fallbacks end in speech.
+          </p>
+
+          <h2>Data and training</h2>
+          <p>
+            The intent data is a set of JSONL files, one per area (lights, ambient sound, radio, web, weather,
+            reminders, and so on). Each line is an instruction, an input sentence and a label:
+          </p>
+<pre><code>{"instruction": "Classify the intent of the following sentence.",
+ "input": "Can you switch on the kitchen lights for me?",
+ "output": "kitchen-on"}</code></pre>
+          <p>
+            The version in the repository has 1,365 examples across 15 files: 750 in English and 615 in Greek. The
+            label map defines 50 labels, including <code>generative</code>. 44 of them have examples, between 17
+            and 60 each; the other six exist in the map but have no data yet, which I come back to at the end.
+          </p>
+          <p>
+            Before tokenization, each sentence goes through a small preprocessor. It lowercases and normalizes
+            whitespace, and for text without Greek characters it strips punctuation and runs an English spell
+            checker. Greek text is detected with a character-range check and left alone, since a spell checker
+            built for English would only damage it.
+          </p>
+          <p>
+            The repository still contains the DistilBERT baseline (<code>distilbert-base-multilingual-cased</code>),
+            so the training details I can show here are for that model: sequences of 64 tokens, batch size 16,
+            learning rate 2e-5, mixed precision, trained with the Hugging Face <code>Trainer</code>. The logged run
+            took about nine minutes on a single A100. The final model in the thesis is XLM-RoBERTa, and that is the
+            one the results below refer to.
+          </p>
+          <p>
+            For the fallbacks, the retrieval set is 231 question and answer pairs about ESDA Lab, almost all in
+            English. The FAISS index is a flat L2 index, so search is exact rather than approximate, which is the
+            right call at this size. The repository's generative experiment is a GPT-2 fine-tune on the same ESDA
+            Lab questions; the final thesis system uses mT5-small.
+          </p>
+
+          <h2>Results</h2>
+          <p>All numbers come from the evaluation in the thesis.</p>
+
+          <div class="table-scroll">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Model</th>
+                  <th>Metric</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Intent classifier</td>
+                  <td>XLM-RoBERTa</td>
+                  <td>Accuracy / macro-F1</td>
+                  <td>97.1% / 0.967</td>
+                </tr>
+                <tr>
+                  <td>Retrieval fallback</td>
+                  <td>MiniLM + FAISS</td>
+                  <td>Hit@1 / MRR</td>
+                  <td>48% / 0.579</td>
+                </tr>
+                <tr>
+                  <td>Generative fallback</td>
+                  <td>mT5-small</td>
+                  <td>Rated fully appropriate</td>
+                  <td>27.9%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>
+            The classifier carries the system. 97.1% accuracy across a bilingual intent set is the number that
+            decides whether people can actually use the assistant, and the macro-F1 of 0.967 sitting close to it
+            means the result is not a few large intents hiding a long tail of weak ones.
+          </p>
+          <p>
+            The fallbacks are much weaker, and I think that is worth saying plainly instead of burying it. There are
+            a few reasons, and they are mostly structural rather than a matter of tuning:
+          </p>
+          <ul>
+            <li>
+              <strong>They get the hardest inputs by construction.</strong> A sentence only reaches retrieval because
+              the classifier was unsure about it. Whatever made it ambiguous for the classifier usually makes it hard
+              for the retriever too.
+            </li>
+            <li>
+              <strong>The retrieval set is small and English.</strong> 231 pairs cannot cover what people ask a lab
+              assistant, and a bilingual front end feeding an English-only knowledge base will miss Greek questions
+              that have no good English neighbor.
+            </li>
+            <li>
+              <strong>Retrieval always answers.</strong> The lookup returns the single nearest question with no
+              distance cutoff, so a question with no real match still gets the closest wrong answer. An MRR of 0.579
+              against a Hit@1 of 48% also says the right entry is sometimes ranked lower down rather than first.
+            </li>
+            <li>
+              <strong>Open-ended generation with a small model is hard.</strong> mT5-small is a small model asked to
+              do the least constrained job in the system, and 27.9% fully appropriate replies reflects that.
+            </li>
+          </ul>
+          <p>
+            For the design, the conclusion is the one the architecture already encodes. The fallbacks are useful as
+            a way to keep the conversation going, not as a source of truth, and they should never be able to trigger
+            an action. When the system is unsure, the worst case is an unhelpful sentence, not a light switching on
+            in an empty room.
+          </p>
+
+          <h2>Kalliope integration</h2>
+          <p>
+            Because every label is a synapse name, the integration is thin. Kalliope has a documented command line
+            option, <code>--run-synapse</code>, that runs one named synapse from the brain. The classifier only has
+            to produce the right name. This is the classification step from <code>classifier.py</code>:
+          </p>
+<pre><code>def classify(self, text: str) -&gt; tuple[str, float]:
+    input_text = f"{INTENT_PROMPT_PREFIX} {text}"
+    inputs = self.tokenizer(
+        input_text,
+        return_tensors="pt",
+        truncation=True,
+        padding="max_length",
+        max_length=INTENT_MAX_LENGTH,
+    ).to(self.device)
+
+    with torch.no_grad():
+        logits = self.model(**inputs).logits
+
+    probs = torch.softmax(logits, dim=1)
+    class_id = torch.argmax(probs, dim=1).item()
+    return id2label[class_id], probs.max().item()</code></pre>
+          <p>And this is the gate from the interactive test loop, where a confident label is handed to Kalliope:</p>
+<pre><code>if confidence &gt;= CONFIDENCE_THRESHOLD and label != "generative":
+    print(f"Kalliope will now run: {label}")
+    subprocess.run(["kalliope", "start", "--run-synapse", label])
+    return</code></pre>
+          <p>
+            Everything that does not pass the gate becomes speech. The retrieval step is short, which is part of
+            why it is easy to reason about:
+          </p>
+<pre><code>def search(self, query: str) -&gt; str:
+    query_vec = self.embedder.encode([query])
+    _, indices = self.index.search(np.array(query_vec), FAISS_TOP_K)
+    matched_text = self.texts[indices[0][0]]
+    return self._answer_lookup.get(
+        matched_text.lower(),
+        f"I found something similar: {matched_text}",
+    )</code></pre>
+          <p>
+            The returned text goes to a single <code>say-dynamic-message</code> synapse whose only job is to speak
+            whatever it is given. That keeps the brain file clean: one synapse per real action, plus one for
+            everything the assistant says on its own.
+          </p>
+
+          <h2>What I would do differently</h2>
+          <p>Going back through the code to write this post made a few things obvious.</p>
+          <p>
+            <strong>Keep the evaluation in the repository.</strong> The thesis numbers come from a separate
+            evaluation, and the training script trains on everything with no evaluation split. Anyone looking at the
+            repository alone cannot reproduce the 97.1%. Next time the split and the evaluation script live next to
+            the training code from day one.
+          </p>
+          <p>
+            <strong>Use one preprocessing function for training and inference.</strong> Training lowercases,
+            strips punctuation and spell-checks; the inference code passes raw text to the tokenizer, and with a
+            different maximum length (128 instead of 64). The model still works, but it is seeing slightly different
+            inputs in production than in training, and that kind of skew is cheap to prevent and annoying to debug.
+          </p>
+          <p>
+            <strong>Let retrieval say "I don't know".</strong> A distance threshold on the FAISS result would turn a
+            confident wrong answer into an honest non-answer. For a lab assistant that is a better failure.
+          </p>
+          <p>
+            <strong>Make the knowledge base bilingual.</strong> The classifier understands Greek; the retrieval set
+            mostly does not. The multilingual embedding model can bridge some of that gap, but Greek question and
+            answer pairs would do it properly.
+          </p>
+          <p>
+            <strong>Clean up the label map and the keyword rule.</strong> Six labels have no training examples, so
+            the classifier can never predict them. There is also a keyword override that forces the reminder intent
+            when certain phrases appear; it includes very short Greek words like <code>σε</code> matched as
+            substrings, which can fire far more often than intended. Either give the model the examples it needs or
+            make the rule much narrower.
+          </p>
+
+          <h2>Technical overview</h2>
+          <div class="table-scroll">
+            <table>
+              <tbody>
+                <tr><td>Task</td><td>Multilingual intent understanding for a voice assistant</td></tr>
+                <tr><td>Context</td><td>M.Sc. thesis, FTN, University of Novi Sad; Erasmus+ at the University of the Peloponnese</td></tr>
+                <tr><td>Languages</td><td>English, Greek</td></tr>
+                <tr><td>Intent data (repository)</td><td>1,365 labeled sentences, 50 labels in the label map</td></tr>
+                <tr><td>Classifier</td><td>XLM-RoBERTa (final); DistilBERT multilingual (repository baseline)</td></tr>
+                <tr><td>Confidence gate</td><td>0.9 softmax probability</td></tr>
+                <tr><td>Retrieval</td><td>paraphrase-multilingual-MiniLM-L12-v2 + FAISS IndexFlatL2, top-1</td></tr>
+                <tr><td>Generative fallback</td><td>mT5-small (final); GPT-2 (repository experiment)</td></tr>
+                <tr><td>Integration</td><td>Kalliope <code>--run-synapse</code>, one synapse per intent</td></tr>
+                <tr><td>Framework</td><td>PyTorch, Hugging Face Transformers, sentence-transformers, FAISS</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Links</h2>
+          <ul>
+            <li>Code: <a href="https://github.com/DragomirBozoki/kalliope-dual-llm-chatbot" target="_blank" rel="noreferrer">DragomirBozoki/kalliope-dual-llm-chatbot</a></li>
+            <li>Kalliope: <a href="https://kalliope-project.github.io/" target="_blank" rel="noreferrer">kalliope-project.github.io</a></li>
+          </ul>
+
+          <p>
+            Thanks to my mentor for guiding the thesis, and to ESDA Lab for giving me a real Kalliope setup to
+            build on during my Erasmus+ semester.
+          </p>
+
+          <p><a href="https://github.com/DragomirBozoki/kalliope-dual-llm-chatbot" target="_blank" rel="noreferrer">View source on GitHub &rarr;</a></p>
+        </div>
+
+        <footer class="post-footer">
+          <a class="button" href="/posts/agibot-x2-a2-conversational-ai-humanoid-robots/">Next: Building a Multimodal AI Platform for Humanoid Robots</a>
+          <a class="button button-primary" href="/blog/">All Posts</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>
