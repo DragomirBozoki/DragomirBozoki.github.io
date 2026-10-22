@@ -349,7 +349,7 @@ body {
    heading and the top of the first card peek in below the fold,
    so it's obvious the page keeps going. */
 .hero {
-  min-height: calc(100svh - var(--nav-height) - 170px);
+  min-height: calc(100svh - var(--nav-height) - 260px);
   display: flex;
   flex-direction: column;
   justify-content: center;

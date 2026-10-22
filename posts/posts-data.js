@@ -1,7 +1,9 @@
 /* Every post on the site. The homepage and /blog/ render from this list.
    type:      "project" (shows under Projects) or "article" (shows under Writing).
    featured:  1 | 2 | 3 on exactly three projects; sets the order of the big cards.
-   cardImage: image for a featured card (shown 16:9, cropped to fit), with cardAlt as its alt text. */
+   cardImage: image for a featured card (shown 16:9, cropped to fit), with cardAlt as its alt text.
+   After editing this file (or styles.css / main.js), bump the ?v= number on the
+   <link>/<script> tags so browsers do not keep serving a cached copy. */
 
 window.POSTS = [
   {
