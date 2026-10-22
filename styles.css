@@ -392,6 +392,19 @@ body {
   color: var(--text-muted);
 }
 
+.hero-bio + .hero-bio {
+  margin-top: 0.9rem;
+}
+
+.hero-bio strong {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hero-bio .hero-org {
+  color: var(--accent);
+}
+
 .hero .cta-row {
   margin-top: 2.25rem;
   align-items: center;
