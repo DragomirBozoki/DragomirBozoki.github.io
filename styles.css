@@ -191,6 +191,17 @@ body {
   font-weight: 500;
 }
 
+/* CV link: last nav item, set apart only by the accent color. */
+.nav-links a.nav-cv {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-links a.nav-cv:hover,
+.nav-links a.nav-cv:focus-visible {
+  color: var(--accent-hover);
+}
+
 /* Hamburger toggle, only shown at phone widths (see below). */
 .nav-toggle {
   display: none;
