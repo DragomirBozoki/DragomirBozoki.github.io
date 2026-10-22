@@ -5,8 +5,7 @@
    along with --radius and the --font-* stacks.
    ───────────────────────────────────────────────────────── */
 
-/* Entry point: a quiet trigger next to the wordmark on narrow
-   and medium screens, where there's no real margin to spare. */
+/* Entry point: a quiet trigger next to the wordmark in the nav. */
 
 .nav-brand-group {
   display: flex;
@@ -30,51 +29,6 @@
 .game-trigger:hover,
 .game-trigger:focus-visible {
   color: var(--accent-hover);
-}
-
-/* On wide viewports there's real margin to the left of the page
-   column, so the trigger moves there instead, as its own small
-   bordered box rather than a bare text link. */
-
-.game-trigger-box {
-  display: none;
-  position: fixed;
-  top: 96px;
-  left: 28px;
-  z-index: 50;
-  width: 200px;
-  min-height: 58px;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--accent);
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 0.72rem;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  transition: color 150ms ease, border-color 150ms ease, background 150ms ease, transform 150ms ease;
-}
-
-.game-trigger-box:hover,
-.game-trigger-box:focus-visible {
-  color: var(--accent-hover);
-  border-color: var(--accent-hover);
-  background: var(--accent-soft);
-  transform: translateY(-1px);
-}
-
-@media (min-width: 1200px) {
-  .game-trigger-box {
-    display: flex;
-  }
-
-  .nav-brand-group .game-trigger {
-    display: none;
-  }
 }
 
 /* Subtle desaturation of the page itself while the game is running */
@@ -445,23 +399,8 @@ body.game-scroll-lock {
     padding: 1.4rem 1.15rem;
   }
 
-  /* The nav is already tight at phone widths. Stack the trigger under
-     the wordmark instead of widening the row, so it never competes
-     with "Home / Writing / About / Contact" for horizontal space. */
-  .site-nav {
-    height: auto;
-  }
-
-  .nav-inner {
-    height: auto;
-    min-height: var(--nav-height);
-    padding: 0.5rem 0;
-  }
-
   .nav-brand-group {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.15rem;
+    gap: 0.6rem;
   }
 
   .game-trigger {
