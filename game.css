@@ -14,6 +14,7 @@
 }
 
 .game-trigger {
+  white-space: nowrap;
   border: 0;
   background: transparent;
   padding: 0;

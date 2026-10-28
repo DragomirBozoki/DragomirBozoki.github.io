@@ -143,6 +143,7 @@ body {
 }
 
 .brand {
+  white-space: nowrap;
   font-family: var(--font-text);
   font-weight: 700;
   font-size: 1.05rem;
@@ -258,7 +259,8 @@ body {
   transform: translateY(-6px) rotate(-45deg);
 }
 
-@media (max-width: 760px) {
+/* The link row needs ~1000px once START GAME, Publications and CV are in it. */
+@media (max-width: 1000px) {
   .nav-toggle {
     display: inline-flex;
   }
@@ -920,8 +922,33 @@ body {
   filter: grayscale(1);
 }
 
+/* Full-color logos with built-in whitespace (IEEE): keep the padded
+   tile, but go grayscale to match the rest of the logo column. */
+.edu-logo--mono {
+  filter: grayscale(1);
+}
+
 .edu-text {
   min-width: 0;
+}
+
+/* ───────── Publications (reuses the education row layout) ───────── */
+
+.pub-me {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.pub-abstract {
+  margin-top: 0.75rem;
+  max-width: 70ch;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.pub-links {
+  margin-top: 0.6rem;
 }
 
 .edu-degree {
