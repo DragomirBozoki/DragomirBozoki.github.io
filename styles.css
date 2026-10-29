@@ -1430,6 +1430,25 @@ body {
   font-style: italic;
 }
 
+/* Wide diagram exported on a white background: full column width, and
+   a white panel so it reads as a card in dark mode too. */
+.post-media.post-figure {
+  max-width: none;
+}
+
+.post-figure a {
+  display: block;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+}
+
+.post-figure img {
+  max-height: none;
+  border-radius: 0;
+}
+
 /* Inline SVG diagrams: shapes and text pull from the color tokens so
    they follow the light/dark scheme like the rest of the page. */
 .post-diagram {

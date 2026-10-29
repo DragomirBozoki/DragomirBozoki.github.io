@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/favicon.png" />
-  <link rel="stylesheet" href="/styles.css?v=7" />
+  <link rel="stylesheet" href="/styles.css?v=8" />
 </head>
 <body>
   <div class="page-shell">
@@ -39,7 +39,7 @@
         <div class="post-meta">
           <span>May 8, 2026</span>
           <span class="meta-dot">.</span>
-          <span>12 min read</span>
+          <span>18 min read</span>
           <span class="meta-dot">.</span>
           <span>Dragomir Bozoki</span>
           <span class="meta-dot">.</span>
@@ -89,6 +89,15 @@
             03 · Blink module: deterministic cosine pulses that supply behavior the audio cannot.
             04 · Final validation MAE: 0.01844, with each component contributing visible perceptual gains.
           </div>
+
+          <p>
+            We later wrote this work up as a paper, which has been accepted at TELFOR 2026, the 34th
+            Telecommunications Forum (IEEE, Belgrade, 24 to 26 November 2026). Authors: Iva Marković, Neda Šerović,
+            Dragomir Božoki, and Andrej Dušanić, with Tijana Nosek and Siniša Suzić as mentors. The paper describes a
+            revised system, not the one we submitted to the competition. Most of this post is about the competition
+            entry. The differences, and the paper's own numbers, are in
+            <a href="#the-paper-system">their own section</a> further down.
+          </p>
 
           <h2>The Problem, Briefly</h2>
           <p>
@@ -156,7 +165,121 @@
             peak loss that upweights the high-variance mouth coefficients, and the phoneme cross-entropy. The phoneme
             head exists purely for representation regularization. We never use its output at inference.
           </p>
+
+          <figure class="post-media post-figure">
+            <a href="/images/Avatar/Fig1_pipeline.png" target="_blank" rel="noopener">
+              <img
+                src="/images/Avatar/Fig1_pipeline.png"
+                alt="Pipeline diagram: speech audio features and a Serbian transcript feed a multi-head attention fusion block, then either a causal TCN or a BiGRU, then a regression head and an auxiliary viseme head, then the face refiner, producing ARKit-52 coefficients"
+                loading="lazy"
+              />
+            </a>
+            <figcaption>
+              Overview of the multimodal blendshape prediction pipeline from the paper. Both temporal paths share the
+              same output heads and the same face refiner.
+            </figcaption>
+          </figure>
+
+          <p>
+            The figure is the paper version, but the shape is the same one we used in the competition. The
+            difference is what happens at the temporal model: in the competition both paths ran and their outputs
+            were averaged, in the paper they are two separate models. More on that below.
+          </p>
           <p>So far, nothing exotic. The interesting decisions are downstream.</p>
+
+          <h2>Inside the Model</h2>
+          <p>
+            The paragraph above is the short version. This is the longer one. The configuration below is the one
+            reported in the paper.
+          </p>
+
+          <h3>Audio features</h3>
+          <p>
+            Audio is 16 kHz speech. From it we compute an 80-channel log-Mel spectrogram, then the first and second
+            temporal derivatives of it (delta and delta-delta). Stacking the three gives 240 dimensions per frame.
+            The features are aligned to the 60 fps blendshape targets, so there is one feature vector per animation
+            frame. Features are Z-score
+            normalised before they go into the network.
+          </p>
+          <p>
+            Delta and delta-delta are cheap, but they matter here. A lot of what the face does during speech is
+            about transitions: the jaw starts opening before the vowel is at full energy, and the lips close before
+            a plosive releases. The derivatives make those onsets visible to the model directly.
+          </p>
+
+          <h3>Text encoding</h3>
+          <p>
+            The transcript is tokenised at the character level. For Serbian this is a reasonable choice and not just
+            a lazy one: the orthography is close to phonemic, so one letter maps to one sound in almost every case.
+            Characters therefore track the phoneme sequence closely, without needing a grapheme-to-phoneme model in
+            front. The character sequence goes through a bidirectional GRU encoder with 128 units per direction, so
+            each character ends up as a 256-dimensional vector that knows about its neighbours.
+          </p>
+
+          <h3>Fusion</h3>
+          <p>
+            Audio and text are combined with 4-head attention. Audio frames are the queries, and the character
+            representations are the keys and values. Each audio frame asks which characters it corresponds to and
+            pulls in a weighted mix of them. This sidesteps forced alignment entirely: the model learns the
+            alignment between 60 fps frames and a much shorter character sequence on its own. The attended text
+            vector is combined with the audio features through a linear layer with a GELU before it goes into the
+            temporal model.
+          </p>
+
+          <h3>Temporal models</h3>
+          <p>
+            <strong>Causal TCN.</strong> 12 residual blocks of dilated 1D convolutions, with dilations
+            [1, 2, 4, 8, 16, 32] repeated twice. Padding is causal, so the prediction for frame <em>t</em> only ever
+            sees frames up to <em>t</em>. The doubling dilations give a wide receptive field with few layers, and
+            causality means it can run on a live stream with no lookahead.
+          </p>
+          <p>
+            <strong>BiGRU.</strong> Two bidirectional GRU layers with 256 units in total, followed by a feed-forward
+            block with a residual connection. It sees the whole utterance in both directions, which helps with
+            coarticulation (the shape of a sound depends on the sounds after it), but it cannot run until the
+            utterance is finished.
+          </p>
+
+          <h3>Output heads</h3>
+          <p>
+            A regression head predicts the 52 blendshapes per frame, with a sigmoid so the output stays in [0, 1].
+            Next to it sits an auxiliary viseme classification head. It is only used during training as an extra
+            signal that pushes the shared representation to separate mouth shapes cleanly. At inference it is
+            dropped.
+          </p>
+
+          <h3>The loss, written out</h3>
+          <pre><code>L = L_reg + 0.1 * L_temp + 0.2 * L_aux + 0.35 * L_peak</code></pre>
+          <ul>
+            <li>
+              <strong>L_reg</strong> is Smooth L1 between predicted and target blendshapes, weighted twice. There is
+              a static weight per group: 2.0 for jaw, mouth, and tongue, 1.2 for cheek and nose, 1.0 for everything
+              else. On top of that there is a dynamic weight per frame, <code>1 + 2.5 * a^1.5</code>, where
+              <code>a</code> is the target activation. Frames where a coefficient is strongly active cost more to
+              get wrong, which directly fights the tendency to predict near-zero everywhere.
+            </li>
+            <li>
+              <strong>L_temp</strong> is the temporal smoothness term. It works on frame-to-frame differences
+              rather than on values, and keeps the predicted trajectories from jittering.
+            </li>
+            <li>
+              <strong>L_aux</strong> is the classification loss of the viseme head.
+            </li>
+            <li>
+              <strong>L_peak</strong> targets the peaks. It applies a max-pool of size 7 over 12 critical oral
+              coefficients, on both prediction and target, and compares the local maxima. Regression losses tend to
+              shave the tops off peaks, because predicting a slightly lower value everywhere is a safe bet. That is
+              exactly what makes vowels look mumbled and plosives look soft. Comparing the local maxima directly
+              punishes that attenuation.
+            </li>
+          </ul>
+
+          <h3>Training setup</h3>
+          <p>
+            PyTorch, AdamW with learning rate 3e-4 and weight decay 1e-4, cosine annealing, batch size 8, gradient
+            clipping at 1.0, 18 epochs, fixed seed. Everything trained on a single GPU on Colab. Nothing about this
+            needs a cluster.
+          </p>
 
           <h2>1. Why Two Models, Not One</h2>
           <p>
@@ -258,6 +381,10 @@
           </p>
 
           <h2>3. The Blink Module</h2>
+          <p class="post-callout">
+            Demo and repository only. The blink module runs in the demo video above and is in the repository, but it
+            is deliberately not part of the paper. It improves no metric. It only makes the output look alive.
+          </p>
           <p>
             Even after the refiner, blinks were the weak point. The model produced something blink-shaped maybe once
             every 8 to 10 seconds, and the amplitude was apologetic. Real human blinks happen every 3 to 5 seconds
@@ -296,7 +423,13 @@
           </div>
 
           <h2>Results</h2>
-          <p>All numbers below are on the held-out validation set of 54 clips.</p>
+          <p>
+            These are the competition system's numbers, on the held-out validation set of 54 clips. The paper's
+            numbers come from a different version of the dataset and a different split, so they are in a separate
+            table further down and should not be compared row by row with this one.
+          </p>
+
+          <div class="table-scroll">
 
           <table class="results-table">
             <thead>
@@ -333,6 +466,8 @@
             </tbody>
           </table>
 
+          </div>
+
           <p>
             The per-blendshape error breakdown is more interesting than the average. The hardest coefficients to
             predict are <code>mouthLowerDownLeft</code> (MAE 0.0781), <code>mouthLowerDownRight</code> (0.0754), and
@@ -346,6 +481,148 @@
             over coefficients that contain almost no information. The aggregate number looks better than the model
             deserves.
           </p>
+
+          <h2 id="the-paper-system">The Paper System, and How It Differs</h2>
+          <p>
+            The competition entry and the system in the paper are not the same thing, and I want to keep them
+            apart. The competition entry used an ensemble. The paper deliberately does not. In the competition the
+            goal was one best score on one validation set, and averaging two models is a cheap way to get there. For
+            the paper the goal shifted: two models serving two different deployment scenarios, each one usable on
+            its own.
+          </p>
+          <ul>
+            <li>
+              <strong>Causal TCN</strong> for low-latency real time. It never looks ahead, so it can drive an avatar
+              while the person is still speaking.
+            </li>
+            <li>
+              <strong>BiGRU</strong> for offline quality, when the whole utterance is available up front and latency
+              does not matter.
+            </li>
+          </ul>
+          <p>
+            Averaging them would throw that away. The ensemble inherits the BiGRU's need for the whole utterance, so
+            it can never be real time, and it is never clear which model is responsible for what.
+          </p>
+          <p>The other differences, briefly:</p>
+          <ul>
+            <li>
+              <strong>Text is a full input, not an optional branch.</strong> Both models get the transcript through
+              the 4-head attention fusion described in <em>Inside the Model</em>.
+            </li>
+            <li>
+              <strong>An auxiliary viseme head</strong> sits next to the regression head during training.
+            </li>
+            <li>
+              <strong>The face refiner is ridge regression.</strong> Same idea as the competition refiner, a linear
+              map from the prediction, its frame-to-frame delta, and its square, but fitted in closed form with a
+              ridge penalty and applied to each model separately.
+            </li>
+            <li><strong>No blink module.</strong> It improves no metric, so it has no place in a paper.</li>
+          </ul>
+
+          <h3>Dataset</h3>
+          <p>
+            The paper uses a larger dataset than the competition: 808 sentences from 5 speakers (3 female, 2 male).
+            688 are used for training and 120 are held out, with the split balanced across speakers. The dataset is
+            public on <a href="https://zenodo.org/records/20310208" target="_blank" rel="noopener">Zenodo</a>.
+          </p>
+
+          <h3>Objective results</h3>
+          <p>On the 120 held-out sentences, after refinement:</p>
+
+          <div class="table-scroll">
+
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Paper system</th>
+                <th>MAE</th>
+                <th>RMSE</th>
+                <th>Mouth MAE</th>
+                <th>JawOpen MAE</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>TCN + refiner (real time)</td>
+                <td>0.0188</td>
+                <td>0.0447</td>
+                <td>0.0229</td>
+                <td>0.0258</td>
+              </tr>
+              <tr>
+                <td>BiGRU + refiner (offline)</td>
+                <td>0.0193</td>
+                <td>0.0430</td>
+                <td>0.0226</td>
+                <td>0.0246</td>
+              </tr>
+            </tbody>
+          </table>
+
+          </div>
+
+          <p>
+            The same pattern as in the competition shows up again. The TCN wins on overall MAE, and the BiGRU makes
+            fewer large errors (lower RMSE) and is better on the mouth region and on <code>jawOpen</code>, which are
+            the coefficients you actually watch. The future context helps exactly where coarticulation lives.
+          </p>
+
+          <h3>Subjective evaluation</h3>
+          <p>
+            Numbers on coefficients only say so much, so we also ran a subjective test. 28 participants
+            each rated 15 clips, 5 per condition, on a 5-point MOS scale.
+          </p>
+          <ul>
+            <li><strong>Seen speakers:</strong> 3.57</li>
+            <li><strong>Synthetic speech:</strong> 3.15</li>
+            <li><strong>Unseen speaker:</strong> 2.90</li>
+          </ul>
+          <p>
+            The ordering is what you would expect. The model is best on voices it trained on, a bit worse on
+            synthetic speech, and worst on a voice it has never heard. The drop to 2.90 is the most honest number in
+            the paper, and it ties directly into the limitations below.
+          </p>
+
+          <h2>Building the Avatar</h2>
+          <p>
+            The rest of this post is about predicting 52 numbers per frame. Those numbers are useless without a face
+            that knows what to do with them, and we built that face ourselves.
+          </p>
+          <p>
+            We took 108 photographs of a volunteer's head from all around and reconstructed it with photogrammetry in
+            RealityScan. Raw photogrammetry meshes are dense and noisy, so the scan was cleaned up in ZBrush and then
+            given a proper animation topology in Maya. All 52 ARKit blendshapes were then modelled by hand, one by
+            one, on that mesh.
+          </p>
+          <p>
+            For playback the head lives in Unreal Engine. The model's predictions are streamed into it over a
+            WebSocket, and Unreal applies the coefficients to the blendshapes in real time. That is what you see in
+            the demo video at the top.
+          </p>
+
+          <h2>Limitations</h2>
+          <p>The paper is upfront about these, and so is this post.</p>
+          <ul>
+            <li>
+              <strong>Small, narrow data.</strong> 808 utterances from 5 speakers of one language variety. That
+              bounds the demographic coverage of everything the model has learned.
+            </li>
+            <li>
+              <strong>The split is by utterance, not by speaker.</strong> The 85/15 split puts every speaker in both
+              training and evaluation. The objective numbers therefore measure generalisation to new sentences from
+              known speakers, not to new speakers.
+            </li>
+            <li>
+              <strong>Unseen speakers only show up in the subjective test.</strong> That is where generalisation to
+              a new voice is actually measured, and that is where MOS falls to 2.90.
+            </li>
+            <li>
+              <strong>The refiner numbers are mildly optimistic.</strong> The refiner hyperparameters were tuned on
+              the same held-out split the results are reported on.
+            </li>
+          </ul>
 
           <h2>What I Would Do Differently</h2>
           <p>A few things, in rough order of how much I think they would matter.</p>
@@ -374,7 +651,7 @@
             <strong>A strictly causal low-latency mode.</strong> The TCN model is already causal, but the BiGRU in
             the ensemble is not. For a real real-time deployment you would either drop the BiGRU or replace it with
             a unidirectional variant with a small lookahead buffer. The latency budget for live avatar animation is
-            tight.
+            tight. This is the one we actually did in the paper: the TCN stands alone as the real-time model.
           </p>
 
           <h2>Closing</h2>
@@ -393,6 +670,14 @@
             Built with Iva Markovic, Neda Serovic, and Andrej Dusanic for the AI-SPEAK 2026 competition at FTN Novi
             Sad. Second place out of three finalists.
           </p>
+
+          <h2>Citation</h2>
+          <div class="post-callout">
+            I. Marković, N. Šerović, D. Božoki, and A. Dušanić, "Audio-Visual Avatar Animation via Blendshape
+            Prediction from Speech and Text in Serbian," in <em>Proc. 34th Telecommunications Forum (TELFOR)</em>,
+            Belgrade, Serbia, 2026. Accepted.
+          </div>
+          <p>The DOI will be added once the paper appears in IEEE Xplore.</p>
         </div>
 
         <footer class="post-footer">
@@ -402,6 +687,6 @@
       </article>
     </main>
   </div>
-  <script src="/main.js?v=7"></script>
+  <script src="/main.js?v=8"></script>
 </body>
 </html>
