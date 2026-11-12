@@ -58,6 +58,18 @@ html {
   scroll-behavior: smooth;
   scroll-padding-top: calc(var(--nav-height) + 8px);
   scrollbar-color: var(--border) var(--bg);
+  /* Stop iOS Safari from inflating text when the phone is rotated. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS Safari draws native button chrome (rounded corners, padding,
+   system font) unless it's switched off. */
+button {
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: inherit;
 }
 
 body {
@@ -98,7 +110,11 @@ img {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  animation: page-enter 1000ms ease-out both;
+  /* "backwards", not "both": once the fade ends the element drops back to
+     no transform at all. A transform left on .page-shell would make it the
+     containing block for the sticky nav and anything fixed inside it,
+     which Safari renders worst. */
+  animation: page-enter 1000ms ease-out backwards;
 }
 
 @keyframes page-enter {
@@ -108,7 +124,7 @@ img {
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
@@ -121,6 +137,14 @@ img {
 
 body {
   overflow-x: clip;
+}
+
+/* Safari before 16 has no overflow: clip. */
+@supports not (overflow-x: clip) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
 }
 
 /* ───────── Navigation ───────── */
@@ -362,6 +386,7 @@ body {
    heading and the top of the first card peek in below the fold,
    so it's obvious the page keeps going. */
 .hero {
+  min-height: calc(100vh - var(--nav-height) - 260px);
   min-height: calc(100svh - var(--nav-height) - 260px);
   display: flex;
   flex-direction: column;
@@ -546,14 +571,34 @@ body {
   box-shadow: 0 18px 40px -18px var(--shadow-strong);
 }
 
+/* The image is absolutely positioned so the box's size comes only from
+   aspect-ratio. With an in-flow img at height: 100%, Safari can't always
+   resolve that percentage against an aspect-ratio height, so the image
+   kept its natural size and every card came out a different shape. */
 .project-media {
+  position: relative;
+  width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border-radius: var(--radius);
   background: var(--surface-2);
+  /* Safari otherwise drops the rounded clip while the image scales on hover. */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  isolation: isolate;
+}
+
+/* Safari before 15 has no aspect-ratio: classic 16:9 padding box. */
+@supports not (aspect-ratio: 16 / 9) {
+  .project-media {
+    height: 0;
+    padding-top: 56.25%;
+  }
 }
 
 .project-media img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1309,6 +1354,7 @@ body {
 .post-body a {
   color: var(--link);
   text-decoration: underline;
+  text-decoration-color: var(--accent-glow);
   text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
@@ -1329,6 +1375,9 @@ body {
   border: 0;
   border-radius: var(--radius);
   padding: 0.08em 0.35em;
+  /* Long paths and identifiers wrap instead of widening the page on phones. */
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .post-body pre {
@@ -1337,6 +1386,7 @@ body {
   padding: 1rem 1.1rem;
   background: var(--code-bg);
   border: 0;
+  border-left: 2px solid var(--border);
   border-left: 2px solid color-mix(in srgb, var(--accent) 40%, var(--code-bg));
   border-radius: 0;
   overflow-x: auto;
@@ -1344,6 +1394,8 @@ body {
 }
 
 .post-body pre code {
+  word-break: normal;
+  overflow-wrap: normal;
   border: 0;
   background: transparent;
   padding: 0;

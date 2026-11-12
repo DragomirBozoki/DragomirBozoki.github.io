@@ -102,7 +102,11 @@
   function playPop(isRare) {
     var ctx = ensureAudio();
     if (!ctx) return;
-    if (ctx.state === "suspended") ctx.resume().catch(function () {});
+    if (ctx.state === "suspended") {
+      // Older Safari's webkitAudioContext.resume() returns undefined, not a Promise.
+      var resumed = ctx.resume();
+      if (resumed && resumed.catch) resumed.catch(function () {});
+    }
 
     var now = ctx.currentTime;
     var osc = ctx.createOscillator();
@@ -451,6 +455,8 @@
 
     var shell = document.querySelector(".page-shell");
     if (shell) shell.classList.add("game-dim");
+    // iOS Safari ignores overflow: hidden on <body> alone, so lock <html> too.
+    document.documentElement.classList.add("game-scroll-lock");
     document.body.classList.add("game-scroll-lock");
 
     state.countdownIntervalId = window.setInterval(tickRound, 1000);
@@ -503,6 +509,7 @@
 
     var shell = document.querySelector(".page-shell");
     if (shell) shell.classList.remove("game-dim");
+    document.documentElement.classList.remove("game-scroll-lock");
     document.body.classList.remove("game-scroll-lock");
 
     state = null;

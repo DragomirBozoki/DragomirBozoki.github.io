@@ -39,8 +39,10 @@
   transition: filter 300ms ease;
 }
 
+html.game-scroll-lock,
 body.game-scroll-lock {
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 /* Game root: a single full-viewport layer, invisible and inert
@@ -53,20 +55,29 @@ body.game-scroll-lock {
 .game-root.is-active {
   display: block;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 9999;
 }
 
 .game-overlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   background: var(--surface-2);
   opacity: 0.62;
 }
 
 .game-field {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   overflow: hidden;
 }
 
@@ -88,6 +99,7 @@ body.game-scroll-lock {
   font-size: 0.7rem;
   letter-spacing: 0.03em;
   color: var(--text-muted);
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -281,7 +293,10 @@ body.game-scroll-lock {
 
 .game-result {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -300,6 +315,7 @@ body.game-scroll-lock {
   padding: 1.75rem 1.5rem;
   text-align: center;
   box-shadow: 0 20px 45px var(--shadow);
+  -webkit-user-select: none;
   user-select: none;
 }
 
