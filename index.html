@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet" />
   <link rel="icon" type="image/png" href="/favicon.png" />
-  <link rel="stylesheet" href="/styles.css?v=9" />
-  <link rel="stylesheet" href="/game.css?v=9" />
+  <link rel="stylesheet" href="/styles.css?v=10" />
+  <link rel="stylesheet" href="/game.css?v=10" />
 </head>
 <body>
   <div class="page-shell">
@@ -39,20 +39,32 @@
 
     <main class="main-content">
       <section class="container hero" aria-label="Introduction">
-        <h1 class="hero-title">hi, <span class="accent">Dragomir</span> here.</h1>
-        <p class="hero-bio">
-          I'm an AI engineer who builds systems that hold up outside the demo. I spent the past year as an AI Engineer at
-          <strong class="hero-org">Comtrade SI</strong>, shipping conversational humanoid robots and production RAG pipelines,
-          after a machine learning internship at the medical AI startup <strong class="hero-org">Vinaver Medical</strong>.
-        </p>
-        <p class="hero-bio">
-          I hold an M.Sc. in Electrical Engineering (signal processing) and a B.Sc. in Biomedical Engineering from the
-          <strong>University of Novi Sad</strong>, and I'm now doing a master's in AI and computer vision at
-          <strong>Sorbonne University</strong> in Paris.
-        </p>
-        <div class="cta-row">
-          <a class="button button-primary" href="#projects">See my projects</a>
-          <a class="button button-plain" href="mailto:bozokidragomir@gmail.com">Email me</a>
+        <div class="hero-copy">
+          <h1 class="hero-title">hi, <span class="accent">Dragomir</span> here.</h1>
+          <p class="hero-bio">
+            I'm an AI engineer who builds systems that hold up outside the demo. I spent the past year as an AI Engineer at
+            <strong class="hero-org">Comtrade SI</strong>, shipping conversational humanoid robots and production RAG pipelines,
+            after a machine learning internship at the medical AI startup <strong class="hero-org">Vinaver Medical</strong>.
+          </p>
+          <p class="hero-bio">
+            I hold an M.Sc. in Electrical Engineering (signal processing) and a B.Sc. in Biomedical Engineering from the
+            <strong>University of Novi Sad</strong>, and I'm now doing a master's in AI and computer vision at
+            <strong>Sorbonne University</strong> in Paris.
+          </p>
+          <div class="cta-row">
+            <a class="button button-primary" href="#projects">See my projects</a>
+            <a class="button button-plain" href="mailto:bozokidragomir@gmail.com">Email me</a>
+          </div>
+        </div>
+        <div class="hero-face" data-hero-face aria-hidden="true">
+          <canvas></canvas>
+          <p class="hero-face-said" data-said>hover me</p>
+          <ul class="hero-face-meters">
+            <li data-bs="jaw"><span>jawOpen</span><i></i><output>0.00</output></li>
+            <li data-bs="blinkL"><span>eyeBlinkLeft</span><i></i><output>0.00</output></li>
+            <li data-bs="smile"><span>mouthSmileLeft</span><i></i><output>0.00</output></li>
+            <li data-bs="brow"><span>browInnerUp</span><i></i><output>0.00</output></li>
+          </ul>
         </div>
       </section>
 
@@ -214,8 +226,9 @@
       <small class="footer-copy">&copy; 2026 Dragomir Bo&#382;oki</small>
     </footer>
   </div>
-  <script src="/posts/posts-data.js?v=9"></script>
-  <script src="/main.js?v=9"></script>
-  <script src="/game.js?v=9"></script>
+  <script src="/posts/posts-data.js?v=10"></script>
+  <script src="/main.js?v=10"></script>
+  <script src="/game.js?v=10"></script>
+  <script src="/hero-face.js?v=10"></script>
 </body>
 </html>

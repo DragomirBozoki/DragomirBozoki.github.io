@@ -388,10 +388,87 @@ body {
 .hero {
   min-height: calc(100vh - var(--nav-height) - 260px);
   min-height: calc(100svh - var(--nav-height) - 260px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(210px, 24vw, 260px);
+  column-gap: clamp(1.5rem, 4vw, 3rem);
+  align-items: center;
+  align-content: center;
   padding: 3rem 0 2rem;
+}
+
+/* Landmark face (hero-face.js): canvas, the word it is saying, and
+   live blendshape meters. Decorative, hidden on phones to keep the
+   projects peeking above the fold. */
+.hero-face canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 26 / 29;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hero-face-said {
+  min-height: 1.4em;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.hero-face-said b {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.hero-face-meters {
+  list-style: none;
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.hero-face-meters li {
+  display: grid;
+  grid-template-columns: 7.2rem minmax(0, 1fr) 2.2rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hero-face-meters i {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.hero-face-meters i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: left;
+  transform: scaleX(var(--v, 0));
+}
+
+.hero-face-meters output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+@media (max-width: 760px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-face {
+    display: none;
+  }
 }
 
 .hero + .section {
@@ -441,13 +518,15 @@ body {
 /* Staggered fade-up on load. The reduced-motion block at the bottom
    switches every animation off, which leaves these at their final,
    fully visible state. */
-.hero > * {
+.hero-copy > *,
+.hero-face {
   animation: hero-in 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
-.hero > :nth-child(2) { animation-delay: 80ms; }
-.hero > :nth-child(3) { animation-delay: 160ms; }
-.hero > :nth-child(4) { animation-delay: 240ms; }
+.hero-copy > :nth-child(2) { animation-delay: 80ms; }
+.hero-copy > :nth-child(3) { animation-delay: 160ms; }
+.hero-copy > :nth-child(4) { animation-delay: 240ms; }
+.hero-face { animation-delay: 200ms; }
 
 @keyframes hero-in {
   from {
